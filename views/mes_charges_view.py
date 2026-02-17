@@ -431,12 +431,11 @@ def afficher_formulaire_ajout_charge(charges_model: ChargesModel,
         with col_btn1:
             submit = st.form_submit_button(
                 "💾 Enregistrer la charge",
-                type="primary",
-                width='stretch'
+                type="primary"
             )
         
         with col_btn2:
-            st.form_submit_button("🔄 Réinitialiser", width='stretch')
+            st.form_submit_button("🔄 Réinitialiser")
         
         # Traitement du formulaire
         if submit:
@@ -2292,7 +2291,7 @@ def _formulaire_salaire(charges_model, couturier_id, salon_id_user: Optional[str
                 help="Référence de paiement (générée automatiquement N+1, modifiable)"
             )
         
-        submit = st.form_submit_button("💾 Enregistrer le salaire", type="primary", width='stretch')
+        submit = st.form_submit_button("💾 Enregistrer le salaire", type="primary")
         
         if submit:
             if not employe_id:
@@ -2424,7 +2423,7 @@ def _formulaire_ponctuelle(charges_model, couturier_id, salon_id_user: Optional[
             key="file_ponctuelle"
         )
         
-        submit = st.form_submit_button("💾 Enregistrer la charge", type="primary", width='stretch')
+        submit = st.form_submit_button("💾 Enregistrer la charge", type="primary")
         
         if submit:
             if montant <= 0:
@@ -2551,7 +2550,7 @@ def _formulaire_fixe(charges_model, couturier_id, salon_id_user: Optional[str] =
             key="file_fixe"
         )
         
-        submit = st.form_submit_button("💾 Enregistrer la charge", type="primary", width='stretch')
+        submit = st.form_submit_button("💾 Enregistrer la charge", type="primary")
         
         if submit:
             if montant <= 0:
@@ -2708,7 +2707,7 @@ def _formulaire_commande(charges_model, commande_model, couturier_id, salon_id_u
             key="file_commande"
         )
         
-        submit = st.form_submit_button("💾 Enregistrer la charge", type="primary", width='stretch')
+        submit = st.form_submit_button("💾 Enregistrer la charge", type="primary")
         
         if submit:
             if not commande_id:
