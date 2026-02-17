@@ -1582,8 +1582,7 @@ def afficher_formulaire_creation_utilisateur(couturier_model: CouturierModel, ad
         
         submit = st.form_submit_button(
             "💾 Créer l'utilisateur",
-            type="primary",
-            width='stretch'
+            type="primary"
         )
         
         if submit:
@@ -1786,8 +1785,7 @@ def afficher_gestion_mots_de_passe(couturier_model: CouturierModel, admin_data: 
         
         submit = st.form_submit_button(
             "🔐 Réinitialiser le mot de passe",
-            type="primary",
-            width='stretch'
+            type="primary"
         )
         
         if submit:
@@ -1879,8 +1877,7 @@ def afficher_reinitialisation_mot_de_passe(couturier_model: CouturierModel, admi
                 
                 submit = st.form_submit_button(
                     "🔐 Réinitialiser le mot de passe",
-                    type="primary",
-                    width='stretch'
+                    type="primary"
                 )
                 
                 if submit:
@@ -1939,8 +1936,7 @@ def afficher_reinitialisation_mot_de_passe(couturier_model: CouturierModel, admi
             
             submit = st.form_submit_button(
                 "🔐 Réinitialiser mon mot de passe",
-                type="primary",
-                width='stretch'
+                type="primary"
             )
             
             if submit:
@@ -2228,7 +2224,7 @@ def afficher_gestion_commandes_admin(commande_model: CommandeModel, admin_data: 
                                 height=100
                             )
                             
-                            if st.form_submit_button("✅ Valider", type="primary", width='stretch'):
+                            if st.form_submit_button("✅ Valider", type="primary"):
                                 try:
                                     if commande_model.valider_fermeture(
                                         demande['id'], admin_id, True, commentaire_admin
@@ -2249,7 +2245,7 @@ def afficher_gestion_commandes_admin(commande_model: CommandeModel, admin_data: 
                                 height=100
                             )
                             
-                            if st.form_submit_button("❌ Rejeter", width='stretch'):
+                            if st.form_submit_button("❌ Rejeter"):
                                 try:
                                     if commande_model.valider_fermeture(
                                         demande['id'], admin_id, False, commentaire_rejet
