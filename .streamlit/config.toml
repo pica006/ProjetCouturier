@@ -10,16 +10,3 @@ gatherUsageStats = false
 
 [client]
 showErrorDetails = true
-
-
-
-[server]
-enableStaticServing = false
-enableXsrfProtection = true
-enableCORS = true
-
-[browser]
-gatherUsageStats = false
-
-[client]
-showErrorDetails = false
