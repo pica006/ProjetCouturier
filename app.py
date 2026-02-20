@@ -1,14 +1,10 @@
 """
 Application Streamlit principale - Gestion Couturier
-Architecture MVC
+Architecture MVC - Compatible Render (DATABASE_URL uniquement)
 """
 import os
 import base64
 import streamlit as st
-from dotenv import load_dotenv
-
-# Charger .env AVANT tout import de config (sinon DB_PASSWORD etc. restent vides)
-load_dotenv()
 
 from views.auth_view import afficher_page_connexion
 from views.commande_view import afficher_page_commande
@@ -23,9 +19,7 @@ from views.super_admin_dashboard import afficher_dashboard_super_admin
 from utils.role_utils import est_admin
 from utils.bottom_nav import render_bottom_nav
 from utils.permissions import est_super_admin
-from models.database import DatabaseConnection, ChargesModel
-from controllers.auth_controller import AuthController
-from controllers.commande_controller import CommandeController
+from database import get_db
 from config import APP_CONFIG, PAGE_BACKGROUND_IMAGES
 
 
@@ -431,14 +425,8 @@ st.markdown("""
     setTimeout(forceButtonColors, 100);
     setTimeout(forceButtonColors, 500);
     
-    // Debounce pour éviter les re-renders visuels excessifs (formulaire qui "clignote")
-    var debounceTimer;
-    function debouncedForceButtonColors() {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(forceButtonColors, 150);
-    }
-    // Observer les changements DOM - debounced pour réduire le flicker
-    const observer = new MutationObserver(debouncedForceButtonColors);
+    // Observer les changements DOM pour forcer les styles sur les nouveaux boutons
+    const observer = new MutationObserver(forceButtonColors);
     observer.observe(document.body, { childList: true, subtree: true });
     </script>
 """, unsafe_allow_html=True)
@@ -642,207 +630,63 @@ def get_page_background_html(page_id):
 
 def initialiser_session_state():
     """
-    POURQUOI ? Pour initialiser toutes les variables de session Streamlit
-    COMMENT ? On vérifie si chaque variable existe, sinon on la crée
-    UTILISÉ OÙ ? Appelé au début de main() pour préparer l'application
-    
-    EXPLICATION DES VARIABLES :
-    - db_connection : Stocke la connexion active à la base de données
-    - authentifie : True si le couturier est connecté, False sinon
-    - couturier_data : Informations du couturier connecté (nom, prénom, etc.)
-    - page : Page actuelle ('connexion', 'nouvelle_commande', 'liste_commandes')
-    - db_type : Type de connexion choisi ('postgresql_local' ou 'render_production')
+    Initialise TOUTES les clés session_state au début de app.py.
+    Ne jamais accéder à st.session_state sans clé existante.
     """
-    # Vérifier si 'db_connection' existe dans la session
-    # Si non, on l'initialise à None (pas de connexion)
-    if 'db_connection' not in st.session_state:
-        st.session_state.db_connection = None
-    
-    # Vérifier si l'utilisateur est authentifié
-    # Par défaut : False (non connecté)
-    if 'authentifie' not in st.session_state:
-        st.session_state.authentifie = False
-    
-    # Données du couturier connecté
-    # Par défaut : None (pas de données)
-    if 'couturier_data' not in st.session_state:
-        st.session_state.couturier_data = None
-    
-    # Page actuelle de l'application
-    # Par défaut : 'connexion' (page de démarrage)
-    if 'page' not in st.session_state:
-        st.session_state.page = 'connexion'
-    
-    # Type de base de données choisie
-    # Par défaut : None (pas encore choisi)
-    if 'db_type' not in st.session_state:
-        st.session_state.db_type = None
-
-
-def deconnecter_utilisateur():
-    """
-    Déconnecte proprement l'utilisateur.
-    NOTE: Cette fonction n'est plus utilisée directement.
-    La déconnexion se fait maintenant via JavaScript pour éviter les erreurs DOM.
-    """
-    # Cette fonction est conservée pour compatibilité mais n'est plus appelée
-    # La déconnexion se fait maintenant directement dans le bouton
-    pass
-
-
-def connecter_postgresql_local(config: dict) -> bool:
-    """
-    ============================================================================
-    FONCTION 1 : CONNEXION À POSTGRESQL LOCAL
-    ============================================================================
-    
-    POURQUOI ? Pour se connecter à PostgreSQL installé localement sur votre PC
-    QUAND ? Utilisé pendant le développement et les tests sur votre PC
-    
-    COMMENT ÇA MARCHE ?
-    1. Crée un objet DatabaseConnection avec le type 'postgresql'
-    2. Tente de se connecter avec les paramètres fournis (host, port, etc.)
-    3. Si succès : initialise les tables et retourne True
-    4. Si échec : affiche l'erreur et retourne False
-    
-    PARAMÈTRES :
-    - config : Dictionnaire avec host, port, database, user, password
-    
-    RETOURNE :
-    - True si la connexion a réussi
-    - False si la connexion a échoué
-    
-    UTILISÉ OÙ ? Dans views/auth_view.py quand l'user choisit PostgreSQL local
-    """
-    try:
-        # Créer l'objet de connexion avec le type 'postgresql'
-        db_connection = DatabaseConnection('postgresql', config)
-        
-        # Tenter de se connecter
-        if db_connection.connect():
-            # Sauvegarder la connexion dans la session Streamlit
-            st.session_state.db_connection = db_connection
-            st.session_state.db_type = 'postgresql_local'
-            
-            # Initialiser les tables de la base de données
-            # (créer les tables si elles n'existent pas)
-            auth_controller = AuthController(db_connection)
-            auth_controller.initialiser_tables()
-            
-            commande_controller = CommandeController(db_connection)
-            commande_controller.initialiser_tables()
-            
-            # Initialiser les tables des charges
-            charges_model = ChargesModel(db_connection)
-            charges_model.creer_tables()
-            
-            return True  # Connexion réussie !
-        
-        return False  # La connexion a échoué
-        
-    except Exception as e:
-        # Si une erreur se produit, l'afficher à l'utilisateur
-        st.error(f"❌ Erreur de connexion PostgreSQL local : {e}")
-        return False
-
-
-def connecter_render_production(config: dict) -> bool:
-    """
-    ============================================================================
-    FONCTION 2 : CONNEXION À RENDER PRODUCTION
-    ============================================================================
-    
-    POURQUOI ? Pour se connecter à PostgreSQL hébergé sur Render (cloud)
-    QUAND ? Utilisé en production quand l'app est déployée en ligne
-    
-    COMMENT ÇA MARCHE ?
-    Exactement comme connecter_postgresql_local(), mais :
-    - Se connecte à un serveur distant (Render) au lieu de localhost
-    - Utilise les identifiants fournis par Render
-    - Peut nécessiter SSL pour la sécurité
-    
-    DIFFÉRENCE AVEC POSTGRESQL LOCAL ?
-    - PostgreSQL Local : Base de données sur VOTRE ordinateur (localhost)
-    - Render : Base de données sur un serveur en ligne (accessible partout)
-    
-    PARAMÈTRES :
-    - config : Dictionnaire avec host, port, database, user, password de Render
-    
-    RETOURNE :
-    - True si la connexion a réussi
-    - False si la connexion a échoué
-    
-    UTILISÉ OÙ ? Dans views/auth_view.py quand l'user choisit Render
-    """
-    try:
-        # Créer l'objet de connexion avec le type 'postgresql'
-        # (Render utilise aussi PostgreSQL, mais hébergé en ligne)
-        db_connection = DatabaseConnection('postgresql', config)
-        
-        # Tenter de se connecter au serveur Render
-        if db_connection.connect():
-            # Sauvegarder la connexion dans la session
-            st.session_state.db_connection = db_connection
-            st.session_state.db_type = 'render_production'
-            
-            # Initialiser les tables
-            auth_controller = AuthController(db_connection)
-            auth_controller.initialiser_tables()
-            
-            commande_controller = CommandeController(db_connection)
-            commande_controller.initialiser_tables()
-            
-            # Initialiser les tables des charges
-            charges_model = ChargesModel(db_connection)
-            charges_model.creer_tables()
-            
-            return True  # Connexion réussie !
-        
-        return False  # La connexion a échoué
-        
-    except Exception as e:
-        # Afficher l'erreur spécifique à Render
-        st.error(f"❌ Erreur de connexion Render : {e}")
-        return False
+    defaults = {
+        "db_connection": None,
+        "authentifie": False,
+        "couturier_data": None,
+        "page": "connexion",
+        "prix_total_form": 0.0,
+        "avance_form": 0.0,
+        "reste_form": 0.0,
+        "modele_selectionne": "",
+        "categorie_precedente": "",
+        "sexe_precedent": "",
+        "pdf_path_upload": None,
+        "pdf_bytes": None,
+        "pdf_filename": None,
+        "show_download_section": False,
+        "show_upload_section": False,
+        "dernier_bulletin_salaire": None,
+        "dashboard_date_debut_input": None,
+        "dashboard_date_fin_input": None,
+        "reset_dashboard_dates": False,
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
+    # Si authentifié mais db_connection perdue (ex: refresh), restaurer depuis cache
+    if st.session_state.get("authentifie") and not st.session_state.get("db_connection"):
+        db = get_db()
+        if db:
+            st.session_state["db_connection"] = db
 
 
 def afficher_header_app():
     """
-    Affiche le header de l'application avec logo et nom (multi-tenant)
-    Le logo est récupéré depuis la base de données selon le salon de l'utilisateur
-    Retourne le HTML formaté pour être utilisé dans la sidebar
+    Affiche le header de l'application avec logo et nom (multi-tenant).
+    Le logo est récupéré depuis la base de données selon le salon de l'utilisateur.
     """
-    import base64
-    import os
-    
-    # Nom de l'application (depuis la configuration)
-    app_name = APP_CONFIG.get('name', 'JAIND')
-    
-    # Récupérer le logo depuis la base de données (multi-tenant)
     logo_base64 = None
     logo_mime = None
-    
     try:
-        # Vérifier si on a une connexion à la base de données et un utilisateur connecté
-        if st.session_state.get('db_connection') and st.session_state.get('couturier_data'):
+        db = st.session_state.get("db_connection") or get_db()
+        if db and st.session_state.get("couturier_data"):
             from models.database import AppLogoModel
             from utils.role_utils import obtenir_salon_id
-            
-            couturier_data = st.session_state.get('couturier_data')
+            couturier_data = st.session_state.get("couturier_data")
             salon_id = obtenir_salon_id(couturier_data)
-            
             if salon_id:
-                logo_model = AppLogoModel(st.session_state.db_connection)
+                logo_model = AppLogoModel(db)
                 logo_data = logo_model.recuperer_logo(salon_id)
-                
-                if logo_data and logo_data.get('logo_data'):
-                    logo_bytes = logo_data['logo_data']
-                    logo_mime = logo_data.get('mime_type', 'image/png')
+                if logo_data and logo_data.get("logo_data"):
+                    logo_bytes = logo_data["logo_data"]
+                    logo_mime = logo_data.get("mime_type", "image/png")
                     logo_base64 = base64.b64encode(logo_bytes).decode()
-    except Exception as e:
-        # En cas d'erreur, on continue sans logo
-        print(f"Erreur récupération logo depuis BDD: {e}")
-        logo_base64 = None
+    except Exception:
+        pass
     
     # Fallback : chercher le logo dans le système de fichiers si pas en BDD
     if not logo_base64:
@@ -946,38 +790,12 @@ def afficher_sidebar():
             
             st.markdown("---")
             
-            # Bouton de déconnexion avec approche simplifiée
+            # Bouton de déconnexion (pas de disconnect - connexion partagée via cache)
             if st.button("🚪 Déconnexion", width='stretch', key="btn_deconnexion"):
-                # Nettoyer la session immédiatement
-                try:
-                    # Déconnecter la base de données
-                    if st.session_state.get('db_connection'):
-                        try:
-                            st.session_state.db_connection.disconnect()
-                        except:
-                            pass
-                    
-                    # Nettoyer toutes les clés sauf les essentielles
-                    keys_to_keep = ['db_connection', 'db_type']
-                    for key in list(st.session_state.keys()):
-                        if key not in keys_to_keep:
-                            try:
-                                del st.session_state[key]
-                            except:
-                                pass
-                    
-                    # Marquer comme déconnecté
-                    st.session_state.authentifie = False
-                    st.session_state.couturier_data = None
-                    st.session_state.page = 'connexion'
-                    
-                except Exception:
-                    # En cas d'erreur, forcer quand même la déconnexion
-                    st.session_state.authentifie = False
-                    st.session_state.couturier_data = None
-                    st.session_state.page = 'connexion'
-                
-                # Rediriger vers la page de connexion
+                st.session_state.authentifie = False
+                st.session_state.couturier_data = None
+                st.session_state.db_connection = None
+                st.session_state.page = "connexion"
                 st.rerun()
         else:
             # Afficher au moins un bloc vide pour forcer l'affichage de la sidebar
@@ -1012,10 +830,16 @@ def main():
     # Header minimaliste (optionnel, peut être commenté)
     # afficher_header_principal()
     
-    # Router selon la page
     if not st.session_state.authentifie:
-        # Page de connexion
         afficher_page_connexion()
+    elif not st.session_state.get("db_connection"):
+        st.error("❌ Connexion base de données perdue. Veuillez vous reconnecter.")
+        if st.button("Retour à la connexion"):
+            st.session_state.authentifie = False
+            st.session_state.couturier_data = None
+            st.session_state.db_connection = None
+            st.session_state.page = "connexion"
+            st.rerun()
     else:
         # Pages authentifiées : image de fond selon la page (calque fixe + style)
         page_bg_html = get_page_background_html(st.session_state.page)
