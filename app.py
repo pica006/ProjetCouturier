@@ -1,10 +1,17 @@
 """
 Application Streamlit principale - Gestion Couturier
-Architecture MVC - Compatible Render (DATABASE_URL uniquement)
+Architecture MVC - Render-safe (aucune connexion DB au démarrage)
 """
 import os
 import base64
 import streamlit as st
+
+if not os.getenv("DATABASE_URL"):
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
 
 from views.auth_view import afficher_page_connexion
 from views.commande_view import afficher_page_commande
@@ -19,7 +26,6 @@ from views.super_admin_dashboard import afficher_dashboard_super_admin
 from utils.role_utils import est_admin
 from utils.bottom_nav import render_bottom_nav
 from utils.permissions import est_super_admin
-from init_db import init_db
 from config import APP_CONFIG, PAGE_BACKGROUND_IMAGES
 
 
@@ -801,20 +807,16 @@ def afficher_header_principal():
 
 def main():
     initialiser_session_state()
-    if st.session_state.db is None:
-        st.session_state.db = init_db()
+    if not os.getenv("DATABASE_URL", "").strip():
+        st.error(
+            "❌ **DATABASE_URL non configurée.**\n\n"
+            "**En local :** ajoutez `DATABASE_URL=postgresql://user:pass@localhost:5432/dbname` dans votre fichier `.env`\n\n"
+            "**Sur Render :** définissez la variable `DATABASE_URL` dans Dashboard → Environment"
+        )
+        st.stop()
     sidebar_bg_css = sidebar_bg_css_with_image if not st.session_state.authenticated else SIDEBAR_BG_PLAIN
     st.markdown(_sidebar_styles_css(sidebar_bg_css), unsafe_allow_html=True)
-    
-    # Afficher la sidebar
     afficher_sidebar()
-    
-    # Header minimaliste (optionnel, peut être commenté)
-    # afficher_header_principal()
-    
-    if not st.session_state.db:
-        st.error("❌ DATABASE_URL non configurée. Définissez-la dans les variables d'environnement.")
-        st.stop()
     if not st.session_state.authenticated:
         afficher_page_connexion()
     else:
@@ -881,4 +883,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        st.error(f"❌ Erreur : {e}")
+        st.exception(e)

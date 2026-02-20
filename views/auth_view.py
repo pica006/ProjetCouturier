@@ -104,10 +104,11 @@ def afficher_page_connexion():
                 else:
                     with st.spinner("Vérification..."):
                         from services.auth_service import authenticate
-                        succes, donnees, message = authenticate(code_couturier.strip(), password_input)
+                        succes, donnees, message, db = authenticate(code_couturier.strip(), password_input)
                         if succes:
                             st.session_state.authenticated = True
                             st.session_state.user = donnees
+                            st.session_state.db = db
                             role_n = str(donnees.get("role", "")).upper().strip()
                             st.session_state.page = "super_admin_dashboard" if role_n == "SUPER_ADMIN" else "nouvelle_commande"
                             st.success(f"✅ {message}")

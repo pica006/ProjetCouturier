@@ -13,15 +13,6 @@ from urllib.parse import urlparse
 
 import streamlit as st
 
-# Charger .env uniquement en local (Render n'utilise pas .env)
-if not os.getenv("DATABASE_URL"):
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except Exception:
-        pass
-
-
 def _parse_database_url(url: str) -> dict:
     """
     Parse DATABASE_URL (format postgresql://user:pass@host:port/dbname)
