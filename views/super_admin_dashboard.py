@@ -31,9 +31,8 @@ def afficher_dashboard_super_admin():
     from utils.page_header import afficher_header_page
     afficher_header_page("🔧 SUPER ADMINISTRATION", "Vue 360° sur tous les salons de couture")
     
-    # Vérifier la connexion
-    if 'db_connection' not in st.session_state:
-        st.error("❌ Erreur : Connexion à la base de données non établie")
+    if not st.session_state.get("db_connection"):
+        st.error("❌ Connexion à la base de données non établie")
         return
     
     # Initialiser les contrôleurs
