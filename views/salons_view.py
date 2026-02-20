@@ -20,11 +20,11 @@ def afficher_page_salons():
     from utils.page_header import afficher_header_page
     afficher_header_page("🏢 Gestion des Salons de Couture", "Créez et gérez vos salons de couture")
     
-    if not st.session_state.get("db_connection"):
+    if not st.session_state.get("db"):
         st.error("❌ Connexion à la base de données non établie")
         return
     
-    salon_model = SalonModel(st.session_state.db_connection)
+    salon_model = SalonModel(st.session_state.db)
     
     # Onglets
     tab1, tab2, tab3 = st.tabs([
