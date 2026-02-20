@@ -18,7 +18,7 @@ Exemple : Dans views/commande_view.py, on fait "from config import MODELES"
 
 OÙ IL EST UTILISÉ ?
 -------------------
-- app.py : Utilise DATABASE_CONFIG pour se connecter à la base
+- database.py : Connexion via DATABASE_URL
 - views/commande_view.py : Utilise MODELES et MESURES pour les formulaires
 - controllers/pdf_controller.py : Utilise PDF_STORAGE_PATH pour sauvegarder les PDF
 """
@@ -106,53 +106,10 @@ COMPANY_INFO = {
 # ============================================================================
 # CONFIGURATION DE LA BASE DE DONNÉES
 # ============================================================================
-
-# POURQUOI ? Pour stocker les informations de connexion à la base de données
-# COMMENT ? Détection automatique : Render (variables d'environnement) ou Local (PostgreSQL)
-# UTILISÉ OÙ ? Dans app.py et views/auth_view.py lors de la connexion
-
-# Détecter si on est sur Render (production)
-# Priorité : DATABASE_HOST ou DATABASE_URL ou RENDER (Render définit RENDER=true automatiquement)
-# Si l'un est défini → on utilise la config Render, JAMAIS localhost
-IS_RENDER = bool(
-    os.getenv('RENDER') or
-    os.getenv('DATABASE_HOST') or
-    os.getenv('DATABASE_URL')
-)
-
-if IS_RENDER:
-    # ========== CONFIGURATION RENDER (PRODUCTION) ==========
-    # Variables d'environnement Render (Dashboard → Environment)
-    # Render n'utilise PAS le fichier .env - tout vient des variables Render
-    DATABASE_CONFIG = {
-        'render_production': {
-            'host': os.getenv('DATABASE_HOST', ''),
-            'port': os.getenv('DATABASE_PORT', '5432'),
-            'database': os.getenv('DATABASE_NAME', ''),
-            'user': os.getenv('DATABASE_USER', ''),
-            'password': os.getenv('DATABASE_PASSWORD', ''),
-            'sslmode': os.getenv('DATABASE_SSLMODE', 'require')
-        }
-    }
-else:
-    # ========== CONFIGURATION LOCAL (POSTGRESQL) ==========
-    # Configuration pour PostgreSQL installé localement sur votre PC
-    # Dans .env utilisez : DB_HOST, DB_PORT=5432, DB_NAME=db_couturier, DB_USER=postgres, DB_PASSWORD=...
-    # Attention : le port 3306 est pour MySQL ; PostgreSQL utilise le port 5432 !
-    _port = os.getenv('DB_PORT', '5432')
-    try:
-        _port = int(_port)
-    except ValueError:
-        _port = 5432
-    DATABASE_CONFIG = {
-        'postgresql_local': {
-            'host': os.getenv('DB_HOST', 'localhost'),
-            'port': _port,
-            'database': os.getenv('DB_NAME', 'db_couturier'),
-            'user': os.getenv('DB_USER', 'postgres'),
-            'password': os.getenv('DB_PASSWORD', '')  # À mettre dans .env uniquement
-        }
-    }
+# Utiliser UNIQUEMENT la variable d'environnement DATABASE_URL.
+# Voir database.py pour la connexion (st.cache_resource).
+# En local : définir DATABASE_URL dans .env (ex: postgresql://user:pass@localhost:5432/db_couturier)
+# Sur Render : DATABASE_URL est fourni automatiquement par le service PostgreSQL.
 
 # ============================================================================
 # MODÈLES DE VÊTEMENTS DISPONIBLES
