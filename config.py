@@ -31,10 +31,13 @@ OÙ IL EST UTILISÉ ?
 # Utilisé ici pour créer des chemins de fichiers et des dossiers
 import os
 
-# Charger .env dès l'import de config (pour DB_PASSWORD, etc.)
+# Charger .env UNIQUEMENT en local (jamais sur Render - Render utilise ses propres variables)
+# Sur Render : RENDER est défini automatiquement, ou DATABASE_HOST est défini manuellement
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    _on_render = os.getenv('RENDER') or os.getenv('DATABASE_HOST') or os.getenv('DATABASE_URL')
+    if not _on_render:
+        load_dotenv()  # Charger .env seulement en local
 except Exception:
     pass
 
@@ -109,12 +112,18 @@ COMPANY_INFO = {
 # UTILISÉ OÙ ? Dans app.py et views/auth_view.py lors de la connexion
 
 # Détecter si on est sur Render (production)
-IS_RENDER = os.getenv('RENDER') is not None or os.getenv('DATABASE_HOST') is not None
+# Priorité : DATABASE_HOST ou DATABASE_URL ou RENDER (Render définit RENDER=true automatiquement)
+# Si l'un est défini → on utilise la config Render, JAMAIS localhost
+IS_RENDER = bool(
+    os.getenv('RENDER') or
+    os.getenv('DATABASE_HOST') or
+    os.getenv('DATABASE_URL')
+)
 
 if IS_RENDER:
     # ========== CONFIGURATION RENDER (PRODUCTION) ==========
-    # Les variables d'environnement sont automatiquement configurées par Render
-    # sslmode=require : requis pour PostgreSQL sur Render
+    # Variables d'environnement Render (Dashboard → Environment)
+    # Render n'utilise PAS le fichier .env - tout vient des variables Render
     DATABASE_CONFIG = {
         'render_production': {
             'host': os.getenv('DATABASE_HOST', ''),
