@@ -123,11 +123,20 @@ class AuthController:
             return False, None, "Mot de passe non configuré pour cet utilisateur"
         
         # ====================================================================
-        # VÉRIFICATION SIMPLE : COMPARAISON DIRECTE DES MOTS DE PASSE
+        # VÉRIFICATION MOT DE PASSE : bcrypt ou clair (rétrocompatibilité)
         # ====================================================================
-        
-        # Comparer directement le mot de passe saisi avec celui de la base
-        if password == password_db:
+        password_ok = False
+        try:
+            if password_db and (password_db.startswith("$2b$") or password_db.startswith("$2a$")):
+                import bcrypt
+                pwd_bytes = password.encode("utf-8")
+                stored_bytes = password_db.encode("utf-8") if isinstance(password_db, str) else password_db
+                password_ok = bcrypt.checkpw(pwd_bytes, stored_bytes)
+            else:
+                password_ok = password == password_db
+        except Exception:
+            password_ok = False
+        if password_ok:
             # ✅ MOT DE PASSE CORRECT !
 
             # 1) Vérifier d'abord si l'utilisateur lui-même est actif
