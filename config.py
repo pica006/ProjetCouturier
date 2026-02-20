@@ -1,522 +1,193 @@
 """
-========================================
-FICHIER DE CONFIGURATION (config.py)
-========================================
-
-POURQUOI CE FICHIER ?
----------------------
-Ce fichier contient TOUTES les configurations de l'application.
-Au lieu de mettre les paramètres partout dans le code, on les centralise ici.
-Avantage : Si on veut changer quelque chose (ex: ajouter un modèle), 
-on modifie uniquement ce fichier, pas tout le code !
-
-COMMENT IL EST UTILISÉ ?
-------------------------
-Les autres fichiers importent ce fichier avec : from config import MODELES, MESURES, etc.
-Exemple : Dans views/commande_view.py, on fait "from config import MODELES"
-          pour afficher la liste des modèles disponibles.
-
-OÙ IL EST UTILISÉ ?
--------------------
-- database.py : Connexion via DATABASE_URL
-- views/commande_view.py : Utilise MODELES et MESURES pour les formulaires
-- controllers/pdf_controller.py : Utilise PDF_STORAGE_PATH pour sauvegarder les PDF
+Configuration - constantes, dictionnaires, chemins statiques uniquement.
 """
 
-# ============================================================================
-# IMPORT DES MODULES NÉCESSAIRES
-# ============================================================================
-
-# os : Module Python pour interagir avec le système d'exploitation
-# Utilisé ici pour créer des chemins de fichiers et des dossiers
-import os
-
-# Charger .env UNIQUEMENT en local (jamais sur Render - Render utilise ses propres variables)
-# Sur Render : RENDER est défini automatiquement, ou DATABASE_HOST est défini manuellement
-try:
-    from dotenv import load_dotenv
-    _on_render = os.getenv('RENDER') or os.getenv('DATABASE_HOST') or os.getenv('DATABASE_URL')
-    if not _on_render:
-        load_dotenv()  # Charger .env seulement en local
-except Exception:
-    pass
-
-# ============================================================================
-# CONFIGURATION DE L'APPLICATION
-# ============================================================================
-
-# POURQUOI ? Pour personnaliser le nom et l'apparence de l'application
-# COMMENT ? Modifiez ces valeurs pour changer le nom et le sous-titre
-# UTILISÉ OÙ ? Dans app.py pour afficher le header avec logo et nom
-
 APP_CONFIG = {
-    'name': 'An\'s Learning',           # Nom principal de l'application
-    'subtitle': 'Système de gestion d\'atelier',  # Sous-titre/description
-    'logo_path': 'assets/logo',             # Chemin du logo (sans extension)
-    # Formats de logo supportés : .png, .jpg, .jpeg
-    # Le système cherchera automatiquement logo.png, puis logo.jpg, puis logo.jpeg
-    'wallpaper_url': 'assets/background_dark.png',  # Image de fond (fichier local)
-    # Si None, aucune image de fond ne sera affichée
+    "name": "An's Learning",
+    "subtitle": "Système de gestion d'atelier",
+    "logo_path": "assets/logo",
+    "wallpaper_url": "assets/background_dark.png",
 }
 
-# ============================================================================
-# IMAGES DE FOND PAR PAGE (zone principale, après connexion)
-# ============================================================================
-# Fichiers dans assets/ : chaque page affiche son image en arrière-plan.
-# Clé = identifiant de la page (st.session_state.page), valeur = nom du fichier.
 PAGE_BACKGROUND_IMAGES = {
-    'administration': 'Admnistrateur.png',       # Page Administration
-    'super_admin_dashboard': 'Admnistrateur.png',  # Dashboard Super Admin
-    'nouvelle_commande': 'commandes.png',        # Nouvelle commande
-    'liste_commandes': 'commandes.png',         # Mes commandes
-    'dashboard': 'TableauDeBord.png',            # Tableau de bord
-    'comptabilite': 'Comptabilite.png',         # Comptabilité
-    'charges': 'Charges.png',                    # Mes charges
-    'fermer_commandes': 'commandes.png',        # Fermer mes commandes
-    'calendrier': 'commandes.png',              # Mon calendrier
+    "administration": "Admnistrateur.png",
+    "super_admin_dashboard": "Admnistrateur.png",
+    "nouvelle_commande": "commandes.png",
+    "liste_commandes": "commandes.png",
+    "dashboard": "TableauDeBord.png",
+    "comptabilite": "Comptabilite.png",
+    "charges": "Charges.png",
+    "fermer_commandes": "commandes.png",
+    "calendrier": "commandes.png",
 }
 
-# ============================================================================
-# BRANDING (COULEURS & STYLE)
-# ============================================================================
-#
-# Modifiez ces couleurs pour coller au branding exact de vos clients.
-# Ces valeurs sont utilisées sur la page de connexion (style luxe).
 BRANDING = {
-    'primary': '#C9A227',   # Or principal
-    'secondary': '#0E0B08', # Noir profond
-    'accent': '#F5EFE6',    # Ivoire
-    'text_dark': '#1A140F', # Texte sombre
-    'text_light': '#F2ECE3' # Texte clair
+    "primary": "#C9A227",
+    "secondary": "#0E0B08",
+    "accent": "#F5EFE6",
+    "text_dark": "#1A140F",
+    "text_light": "#F2ECE3",
 }
 
-# ============================================================================
-# INFORMATIONS DE L'ENTREPRISE
-# ============================================================================
-#
-# Ces informations sont affichées sur la page de connexion.
 COMPANY_INFO = {
-    'name': "An's Learning",
-    'address': 'Douala - Kotto',
-    'manager': 'Sango Justin',
-    'phone': '698192507',
-    'email': 'andresgroup63@gmail.com'
+    "name": "An's Learning",
+    "address": "Douala - Kotto",
+    "manager": "Sango Justin",
+    "phone": "698192507",
+    "email": "andresgroup63@gmail.com",
 }
-
-# ============================================================================
-# CONFIGURATION DE LA BASE DE DONNÉES
-# ============================================================================
-# Utiliser UNIQUEMENT la variable d'environnement DATABASE_URL.
-# Voir database.py pour la connexion (st.cache_resource).
-# En local : définir DATABASE_URL dans .env (ex: postgresql://user:pass@localhost:5432/db_couturier)
-# Sur Render : DATABASE_URL est fourni automatiquement par le service PostgreSQL.
-
-# ============================================================================
-# MODÈLES DE VÊTEMENTS DISPONIBLES
-# ============================================================================
-
-# POURQUOI ? Pour définir tous les types de vêtements que le couturier peut faire
-# COMMENT ? Dictionnaire à 3 niveaux : catégorie → sexe → liste de modèles
-# UTILISÉ OÙ ? Dans views/commande_view.py pour afficher les options dans le formulaire
-#
-# STRUCTURE :
-# MODELES['adulte']['homme'] → retourne la liste des modèles pour homme adulte
-# MODELES['enfant']['fille'] → retourne la liste des modèles pour fille
-#
-# COMMENT AJOUTER UN MODÈLE ?
-# Ajoutez simplement le nom dans la liste appropriée, exemple :
-# 'homme': ['Costume 3 pièces', 'Costume 2 pièces', 'VOTRE NOUVEAU MODÈLE']
 
 MODELES = {
-    # ========== CATÉGORIE : ADULTE ==========
-    'adulte': {
-        # --- Modèles pour HOMME ---
-        'homme': [
-            'Costume 3 pièces',      # Veste + pantalon + gilet
-            'Costume 2 pièces',      # Veste + pantalon
-            'Pantalon classique',    # Pantalon seul
-            'Chemise sur mesure',    # Chemise personnalisée
-            'Veste',                 # Veste seule
-            'Boubou',                # Vêtement traditionnel africain
-            'Caftan',                # Vêtement traditionnel
-            'Gandoura'               # Vêtement traditionnel
+    "adulte": {
+        "homme": [
+            "Costume 3 pièces",
+            "Costume 2 pièces",
+            "Pantalon classique",
+            "Chemise sur mesure",
+            "Veste",
+            "Boubou",
+            "Caftan",
+            "Gandoura",
         ],
-        
-        # --- Modèles pour FEMME ---
-        'femme': [
-            'Robe de soirée',        # Pour événements formels
-            'Robe cocktail',         # Pour soirées
-            'Tailleur jupe',         # Ensemble professionnel avec jupe
-            'Tailleur pantalon',     # Ensemble professionnel avec pantalon
-            'Robe traditionnelle',   # Vêtement culturel
-            'Caftan',                # Vêtement traditionnel
-            'Boubou',                # Vêtement traditionnel africain
-            'Ensemble pagne'         # Ensemble en tissu pagne
-        ]
+        "femme": [
+            "Robe de soirée",
+            "Robe cocktail",
+            "Tailleur jupe",
+            "Tailleur pantalon",
+            "Robe traditionnelle",
+            "Caftan",
+            "Boubou",
+            "Ensemble pagne",
+        ],
     },
-    
-    # ========== CATÉGORIE : ENFANT ==========
-    'enfant': {
-        # --- Modèles pour GARÇON ---
-        'garcon': [
-            'Costume enfant',        # Costume adapté aux enfants
-            'Pantalon',              # Pantalon simple
-            'Chemise',               # Chemise enfant
-            'Ensemble traditionnel', # Tenue traditionnelle
-            'Boubou enfant'          # Boubou taille enfant
+    "enfant": {
+        "garcon": [
+            "Costume enfant",
+            "Pantalon",
+            "Chemise",
+            "Ensemble traditionnel",
+            "Boubou enfant",
         ],
-        
-        # --- Modèles pour FILLE ---
-        'fille': [
-            'Robe de cérémonie',     # Pour événements spéciaux
-            'Robe casual',           # Robe de tous les jours
-            'Ensemble jupe',         # Ensemble avec jupe
-            'Robe traditionnelle',   # Tenue culturelle
-            'Boubou enfant'          # Boubou taille enfant
-        ]
-    }
+        "fille": [
+            "Robe de cérémonie",
+            "Robe casual",
+            "Ensemble jupe",
+            "Robe traditionnelle",
+            "Boubou enfant",
+        ],
+    },
 }
-
-# ============================================================================
-# MESURES REQUISES PAR MODÈLE
-# ============================================================================
-
-# POURQUOI ? Chaque modèle de vêtement a ses propres mesures spécifiques
-# COMMENT ? Dictionnaire avec le nom du modèle comme clé → liste de mesures
-# UTILISÉ OÙ ? Dans views/commande_view.py pour générer les champs de saisie selon le modèle choisi
-#
-# EXEMPLE D'UTILISATION :
-# mesures_boubou = MESURES['Boubou']
-# → Retourne ['Tour de cou', 'Largeur épaules', ...]
-# Ensuite, on crée un champ de saisie pour chaque mesure
-#
-# IMPORTANT : Le nom du modèle doit correspondre EXACTEMENT à celui dans MODELES
-# COMMENT AJOUTER UNE MESURE ?
-# Ajoutez-la dans la liste du modèle approprié, elle apparaîtra automatiquement dans le formulaire
 
 MESURES = {
-    # ========== MODÈLES HOMME ADULTE ==========
-    'Costume 3 pièces': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Tour de bras',
-        'Longueur pantalon',
-        'Entrejambe',
-        'Largeur pantalon (cuisse)'
+    "Costume 3 pièces": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Tour de hanches", "Longueur dos", "Longueur manche", "Tour de bras",
+        "Longueur pantalon", "Entrejambe", "Largeur pantalon (cuisse)",
     ],
-    
-    'Costume 2 pièces': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Tour de bras',
-        'Longueur pantalon',
-        'Entrejambe',
-        'Largeur pantalon (cuisse)'
+    "Costume 2 pièces": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Tour de hanches", "Longueur dos", "Longueur manche", "Tour de bras",
+        "Longueur pantalon", "Entrejambe", "Largeur pantalon (cuisse)",
     ],
-    
-    'Pantalon classique': [
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur pantalon',
-        'Entrejambe',
-        'Largeur pantalon (cuisse)',
-        'Largeur pantalon (bas)'
+    "Pantalon classique": [
+        "Tour de taille", "Tour de hanches", "Longueur pantalon",
+        "Entrejambe", "Largeur pantalon (cuisse)", "Largeur pantalon (bas)",
     ],
-    
-    'Chemise sur mesure': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Longueur dos',
-        'Longueur manche',
-        'Tour de bras',
-        'Longueur chemise'
+    "Chemise sur mesure": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Longueur dos", "Longueur manche", "Tour de bras", "Longueur chemise",
     ],
-    
-    'Veste': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Longueur dos',
-        'Longueur manche',
-        'Tour de bras',
-        'Longueur veste'
+    "Veste": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Longueur dos", "Longueur manche", "Tour de bras", "Longueur veste",
     ],
-    
-    'Boubou': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur boubou',
-        'Largeur bas'
+    "Boubou": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Longueur dos", "Longueur manche", "Longueur boubou", "Largeur bas",
     ],
-    
-    'Caftan': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur caftan',
-        'Largeur bas'
+    "Caftan": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Tour de hanches", "Longueur dos", "Longueur manche", "Longueur caftan",
+        "Largeur bas",
     ],
-    
-    'Gandoura': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur gandoura',
-        'Largeur bas'
+    "Gandoura": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Longueur dos", "Longueur manche", "Longueur gandoura", "Largeur bas",
     ],
-    
-    # ========== MODÈLES FEMME ADULTE ==========
-    'Robe de soirée': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Tour de bras',
-        'Longueur robe',
-        'Hauteur poitrine'
+    "Robe de soirée": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Tour de hanches", "Longueur dos", "Longueur manche", "Tour de bras",
+        "Longueur robe", "Hauteur poitrine",
     ],
-    
-    'Robe cocktail': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Tour de bras',
-        'Longueur robe',
-        'Hauteur poitrine'
+    "Robe cocktail": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Tour de hanches", "Longueur dos", "Longueur manche", "Tour de bras",
+        "Longueur robe", "Hauteur poitrine",
     ],
-    
-    'Tailleur jupe': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Tour de bras',
-        'Longueur jupe',
-        'Hauteur poitrine'
+    "Tailleur jupe": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Tour de hanches", "Longueur dos", "Longueur manche", "Tour de bras",
+        "Longueur jupe", "Hauteur poitrine",
     ],
-    
-    'Tailleur pantalon': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Tour de bras',
-        'Longueur pantalon',
-        'Entrejambe',
-        'Hauteur poitrine'
+    "Tailleur pantalon": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Tour de hanches", "Longueur dos", "Longueur manche", "Tour de bras",
+        "Longueur pantalon", "Entrejambe", "Hauteur poitrine",
     ],
-    
-    'Robe traditionnelle': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur robe',
-        'Largeur bas'
+    "Robe traditionnelle": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Tour de hanches", "Longueur dos", "Longueur manche", "Longueur robe",
+        "Largeur bas",
     ],
-    
-    'Ensemble pagne': [
-        'Tour de cou',
-        'Largeur épaules',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur pagne',
-        'Largeur bas'
+    "Ensemble pagne": [
+        "Tour de cou", "Largeur épaules", "Tour de poitrine", "Tour de taille",
+        "Tour de hanches", "Longueur dos", "Longueur manche", "Longueur pagne",
+        "Largeur bas",
     ],
-    
-    # Note: 'Caftan' et 'Boubou' pour femme utilisent les mêmes mesures que pour homme
-    # (déjà définis plus haut dans la section homme)
-    
-    # ========== MODÈLES ENFANT FILLE (suite) ==========
-    'Robe traditionnelle': [
-        'Tour de cou',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur robe',
-        'Largeur bas'
+    "Costume enfant": [
+        "Tour de cou", "Tour de poitrine", "Tour de taille", "Longueur dos",
+        "Longueur manche", "Longueur pantalon", "Entrejambe",
     ],
-    
-    # ========== MODÈLES ENFANT GARÇON ==========
-    'Costume enfant': [
-        'Tour de cou',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur pantalon',
-        'Entrejambe'
+    "Pantalon": [
+        "Tour de taille", "Tour de hanches", "Longueur pantalon",
+        "Entrejambe", "Largeur pantalon (cuisse)",
     ],
-    
-    'Pantalon': [
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur pantalon',
-        'Entrejambe',
-        'Largeur pantalon (cuisse)'
+    "Chemise": [
+        "Tour de cou", "Tour de poitrine", "Tour de taille", "Longueur dos",
+        "Longueur manche", "Longueur chemise",
     ],
-    
-    'Chemise': [
-        'Tour de cou',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur chemise'
+    "Ensemble traditionnel": [
+        "Tour de cou", "Tour de poitrine", "Tour de taille", "Longueur dos",
+        "Longueur manche", "Longueur ensemble", "Largeur bas",
     ],
-    
-    'Ensemble traditionnel': [
-        'Tour de cou',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur ensemble',
-        'Largeur bas'
+    "Boubou enfant": [
+        "Tour de cou", "Tour de poitrine", "Tour de taille", "Longueur dos",
+        "Longueur manche", "Longueur boubou", "Largeur bas",
     ],
-    
-    'Boubou enfant': [
-        'Tour de cou',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur boubou',
-        'Largeur bas'
+    "Robe de cérémonie": [
+        "Tour de cou", "Tour de poitrine", "Tour de taille", "Tour de hanches",
+        "Longueur dos", "Longueur manche", "Longueur robe",
     ],
-    
-    # ========== MODÈLES ENFANT FILLE ==========
-    'Robe de cérémonie': [
-        'Tour de cou',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur robe'
+    "Robe casual": [
+        "Tour de cou", "Tour de poitrine", "Tour de taille", "Tour de hanches",
+        "Longueur dos", "Longueur manche", "Longueur robe",
     ],
-    
-    'Robe casual': [
-        'Tour de cou',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur robe'
+    "Ensemble jupe": [
+        "Tour de cou", "Tour de poitrine", "Tour de taille", "Tour de hanches",
+        "Longueur dos", "Longueur manche", "Longueur jupe",
     ],
-    
-    'Ensemble jupe': [
-        'Tour de cou',
-        'Tour de poitrine',
-        'Tour de taille',
-        'Tour de hanches',
-        'Longueur dos',
-        'Longueur manche',
-        'Longueur jupe'
-    ]
 }
 
-# ============================================================================
-# CONFIGURATION EMAIL (SMTP)
-# ============================================================================
-#
-# Variables d'environnement recommandées :
-# - EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASSWORD
-# - EMAIL_FROM (optionnel)
-#
-# En production (Render), définissez EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASSWORD dans les variables d'environnement.
-# En local, mettez-les dans .env (ne jamais commiter de vrais mots de passe dans le code).
 EMAIL_CONFIG = {
-    'enabled': True,
-    'host': os.getenv('EMAIL_HOST', 'smtp.gmail.com'),
-    'port': int(os.getenv('EMAIL_PORT', '587')),
-    'user': os.getenv('EMAIL_USER', ''),
-    'password': os.getenv('EMAIL_PASSWORD', ''),
-    'from_email': os.getenv('EMAIL_FROM', os.getenv('EMAIL_USER', '')),
-    'use_tls': True,
-    'use_ssl': False
+    "enabled": True,
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "user": "",
+    "password": "",
+    "from_email": "",
+    "use_tls": True,
+    "use_ssl": False,
 }
 
-# ============================================================================
-# RÉPERTOIRE DE STOCKAGE DES PDF
-# ============================================================================
-
-# POURQUOI ? Pour définir où sauvegarder les PDF générés
-# COMMENT ? On crée un chemin vers le dossier 'pdfs' à côté de ce fichier
-# UTILISÉ OÙ ? Dans controllers/pdf_controller.py lors de la génération de PDF
-#
-# EXPLICATION LIGNE PAR LIGNE :
-# 1. os.path.dirname(__file__) → Obtient le dossier où se trouve config.py
-#    Exemple : Si config.py est dans x:/CouturierProjet/, ça retourne x:/CouturierProjet/
-#
-# 2. os.path.join(..., 'pdfs') → Ajoute 'pdfs' au chemin
-#    Résultat : x:/CouturierProjet/pdfs/
-#
-# 3. if not os.path.exists(...) → Vérifie si le dossier existe
-#    Si le dossier n'existe pas, on le crée avec os.makedirs()
- 
-PDF_STORAGE_PATH = os.path.join(os.path.dirname(__file__), 'pdfs')
-
-# Créer le dossier 'pdfs' s'il n'existe pas encore
-if not os.path.exists(PDF_STORAGE_PATH):
-    os.makedirs(PDF_STORAGE_PATH)  # Crée le dossier et tous les dossiers parents si nécessaire
-
-# ============================================================================
-# RÉPERTOIRE DE STOCKAGE DES DOCUMENTS DE CHARGES
-# ============================================================================
-
-# POURQUOI ? Pour stocker les factures et justificatifs des charges
-# COMMENT ? On crée un chemin vers le dossier 'charges_docs' à côté de ce fichier
-# UTILISÉ OÙ ? Dans views/comptabilite_view.py lors de l'upload de documents
-
-CHARGES_STORAGE_PATH = os.path.join(os.path.dirname(__file__), 'charges_docs')
-
-# Créer le dossier 'charges_docs' s'il n'existe pas encore
-if not os.path.exists(CHARGES_STORAGE_PATH):
-    os.makedirs(CHARGES_STORAGE_PATH)
+PDF_STORAGE_PATH = "/tmp/pdfs"
+CHARGES_STORAGE_PATH = "/tmp/charges_docs"

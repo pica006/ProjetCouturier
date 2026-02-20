@@ -71,6 +71,3 @@ def get_db():
     return None
 
 
-def is_db_available() -> bool:
-    """Vérifie si DATABASE_URL est défini (sans établir de connexion)."""
-    return bool(os.getenv("DATABASE_URL", "").strip())

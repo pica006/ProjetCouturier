@@ -199,18 +199,18 @@ def afficher_page_mes_charges():
     afficher_header_page("📄 Mes charges", "Gérez toutes vos charges et dépenses")
     
     # Vérification de l'authentification
-    if not st.session_state.get('authentifie', False):
+    if not st.session_state.get('authenticated', False):
         st.error("❌ Vous devez être connecté pour accéder à cette page")
         return
     
-    if not st.session_state.get('db_connection'):
+    if not st.session_state.get('db'):
         st.error("❌ Connexion à la base de données requise")
         return
     
     # Vérifier le rôle de l'utilisateur
     from utils.role_utils import est_admin, obtenir_couturier_id, obtenir_salon_id
     
-    couturier_data = st.session_state.couturier_data
+    couturier_data = st.session_state.user
     is_admin = est_admin(couturier_data)
     try:
         salon_id_user = obtenir_salon_id(couturier_data) or ""
@@ -220,8 +220,8 @@ def afficher_page_mes_charges():
     # Si admin, filtrer par salon; sinon, par couturier
     couturier_id = None if is_admin else obtenir_couturier_id(couturier_data)
     
-    charges_model = ChargesModel(st.session_state.db_connection)
-    commande_model = CommandeModel(st.session_state.db_connection)
+    charges_model = ChargesModel(st.session_state.db)
+    commande_model = CommandeModel(st.session_state.db)
     
     # ========================================================================
     # HEADER DE LA PAGE
@@ -1238,13 +1238,13 @@ def _get_logo_from_db(salon_id: Optional[str] = None) -> Optional[bytes]:
         Bytes du logo ou None si non trouvé
     """
     try:
-        if not salon_id and st.session_state.get('couturier_data'):
+        if not salon_id and st.session_state.get('user'):
             from utils.role_utils import obtenir_salon_id
-            salon_id = obtenir_salon_id(st.session_state.couturier_data)
+            salon_id = obtenir_salon_id(st.session_state.user)
         
-        if salon_id and st.session_state.get('db_connection'):
+        if salon_id and st.session_state.get('db'):
             from models.database import AppLogoModel
-            logo_model = AppLogoModel(st.session_state.db_connection)
+            logo_model = AppLogoModel(st.session_state.db)
             logo_data = logo_model.recuperer_logo(salon_id)
             
             if logo_data and logo_data.get('logo_data'):
@@ -1281,9 +1281,9 @@ def _generer_pdf_impots(date_debut,
         # Récupérer salon_id depuis la session
         salon_id = None
         try:
-            if st.session_state.get('couturier_data'):
+            if st.session_state.get('user'):
                 from utils.role_utils import obtenir_salon_id
-                salon_id = obtenir_salon_id(st.session_state.couturier_data)
+                salon_id = obtenir_salon_id(st.session_state.user)
         except:
             pass
         logo_filigrane_data = _get_logo_from_db(salon_id)
@@ -1293,9 +1293,9 @@ def _generer_pdf_impots(date_debut,
         # Préparer les lignes de pied de page (informations du salon)
         footer_lines = None
         try:
-            if salon_id and st.session_state.get('db_connection'):
+            if salon_id and st.session_state.get('db'):
                 from models.salon_model import SalonModel
-                salon_model = SalonModel(st.session_state.db_connection)
+                salon_model = SalonModel(st.session_state.db)
                 salon = salon_model.obtenir_salon_by_id(salon_id)
                 if salon:
                     nom = salon.get('nom_salon') or salon_id
@@ -1551,9 +1551,9 @@ def _generer_pdf_analyse_charges(date_debut,
         # Récupérer le logo et les infos salon depuis la BDD en priorité
         salon_id = None
         try:
-            if st.session_state.get('couturier_data'):
+            if st.session_state.get('user'):
                 from utils.role_utils import obtenir_salon_id
-                salon_id = obtenir_salon_id(st.session_state.couturier_data)
+                salon_id = obtenir_salon_id(st.session_state.user)
         except:
             pass
         logo_filigrane_data = _get_logo_from_db(salon_id)
@@ -1563,9 +1563,9 @@ def _generer_pdf_analyse_charges(date_debut,
         # Préparer les lignes de pied de page (informations du salon)
         footer_lines = None
         try:
-            if salon_id and st.session_state.get('db_connection'):
+            if salon_id and st.session_state.get('db'):
                 from models.salon_model import SalonModel
-                salon_model = SalonModel(st.session_state.db_connection)
+                salon_model = SalonModel(st.session_state.db)
                 salon = salon_model.obtenir_salon_by_id(salon_id)
                 if salon:
                     nom = salon.get('nom_salon') or salon_id
@@ -1911,9 +1911,9 @@ def _generer_pdf_bulletin_salaire(employe_nom: str,
         # Récupérer le logo depuis la BDD en priorité
         salon_id = None
         try:
-            if st.session_state.get('couturier_data'):
+            if st.session_state.get('user'):
                 from utils.role_utils import obtenir_salon_id
-                salon_id = obtenir_salon_id(st.session_state.couturier_data)
+                salon_id = obtenir_salon_id(st.session_state.user)
         except:
             pass
         
@@ -1924,9 +1924,9 @@ def _generer_pdf_bulletin_salaire(employe_nom: str,
         # Préparer les lignes de pied de page (informations du salon)
         footer_lines = None
         try:
-            if salon_id and st.session_state.get('db_connection'):
+            if salon_id and st.session_state.get('db'):
                 from models.salon_model import SalonModel
-                salon_model = SalonModel(st.session_state.db_connection)
+                salon_model = SalonModel(st.session_state.db)
                 salon = salon_model.obtenir_salon_by_id(salon_id)
                 if salon:
                     nom = salon.get('nom_salon') or salon_id

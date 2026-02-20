@@ -1,89 +1,15 @@
 """
-========================================
-VUE D'AUTHENTIFICATION (auth_view.py)
-========================================
-
-POURQUOI CE FICHIER ?
----------------------
-C'est la page de connexion de l'application. Elle gère :
-1. La connexion automatique à la base de données (détection automatique Render/Local)
-2. L'authentification du couturier avec son code et mot de passe
-
-COMMENT IL EST UTILISÉ ?
-------------------------
-Appelé par app.py quand l'utilisateur n'est pas encore connecté.
-Fonction principale : afficher_page_connexion()
-
-OÙ IL EST UTILISÉ ?
--------------------
-Dans app.py, ligne : afficher_page_connexion()
+Vue d'authentification - formulaire uniquement.
+Affiche le formulaire, récupère les inputs, appelle authenticate().
+Aucune logique DB, aucune création de tables.
 """
 
 import base64
 import mimetypes
 import os
 import streamlit as st
-from controllers.auth_controller import AuthController
-from database import get_db, is_db_available
 from config import APP_CONFIG, BRANDING
 from utils.bottom_nav import load_site_content
-
-
-def _resolve_logo_path():
-    logo_base = APP_CONFIG.get('logo_path')
-    if not logo_base:
-        return None
-
-    if os.path.isabs(logo_base) and os.path.exists(logo_base):
-        return logo_base
-
-    project_root = os.path.dirname(os.path.dirname(__file__))
-    candidate = os.path.join(project_root, logo_base)
-
-    if os.path.splitext(candidate)[1]:
-        return candidate if os.path.exists(candidate) else None
-
-    for ext in ('.png', '.jpg', '.jpeg'):
-        possible = f"{candidate}{ext}"
-        if os.path.exists(possible):
-            return possible
-
-    return None
-
-
-def _get_logo_data_uri():
-    logo_path = _resolve_logo_path()
-    if not logo_path:
-        return None
-
-    mime_type, _ = mimetypes.guess_type(logo_path)
-    if not mime_type:
-        mime_type = 'image/png'
-
-    try:
-        with open(logo_path, 'rb') as file:
-            encoded = base64.b64encode(file.read()).decode('utf-8')
-        return f"data:{mime_type};base64,{encoded}"
-    except Exception:
-        return None
-
-
-@st.cache_data(show_spinner=False)
-def _load_wallpaper_data_uri(wallpaper_path: str):
-    """Charge et encode l'image de fond en base64 (cache pour éviter 10s de chargement)."""
-    if not wallpaper_path:
-        return None
-    project_root = os.path.dirname(os.path.dirname(__file__))
-    image_path = os.path.join(project_root, wallpaper_path)
-    if not os.path.exists(image_path):
-        return None
-    try:
-        with open(image_path, 'rb') as f:
-            img_b64 = base64.b64encode(f.read()).decode('utf-8')
-        mime = mimetypes.guess_type(image_path)[0] or 'image/png'
-        return f"data:{mime};base64,{img_b64}"
-    except Exception:
-        return None
 
 
 def _get_lux_vars_style():
@@ -99,417 +25,98 @@ def _get_lux_vars_style():
     </style>
 """
 
-# Styles CSS pour la page de connexion (appliqués dans afficher_page_connexion)
-hide_st_style = """
-    <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* Boutons avec dégradé violet-bleu (pas de rouge !) */
-    .stButton > button {
-        background: linear-gradient(135deg, #B19CD9 0%, #40E0D0 100%) !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 0.75rem 1.5rem !important;
-        font-weight: 500 !important;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
-    }
 
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #B19CD9 0%, #40E0D0 100%) !important;
-        color: #FFFFFF !important;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
-        opacity: 0.9;
-    }
-    
-    /* Boutons primaires - dégradé inversé */
-    button[kind="primary"],
-    button[data-baseweb="button"][kind="primary"] {
-        background: linear-gradient(135deg, #40E0D0 0%, #B19CD9 100%) !important;
-        color: #FFFFFF !important;
-        border: none !important;
-    }
-    
-    button[kind="primary"]:hover,
-    button[kind="primary"]:active,
-    button[kind="primary"]:focus {
-        background: linear-gradient(135deg, #40E0D0 0%, #B19CD9 100%) !important;
-        color: #FFFFFF !important;
-    }
-    
-    /* Empêcher Streamlit de mettre du rouge par défaut */
-    button[data-baseweb="button"] {
-        background: linear-gradient(135deg, #B19CD9 0%, #40E0D0 100%) !important;
-        color: #FFFFFF !important;
-    }
-    
-    button[data-baseweb="button"]:hover,
-    button[data-baseweb="button"]:active,
-    button[data-baseweb="button"]:focus {
-        background: linear-gradient(135deg, #B19CD9 0%, #40E0D0 100%) !important;
-        color: #FFFFFF !important;
-    }
-
-    /* =====================================================================
-       PAGE DE CONNEXION - DESIGN PREMIUM
-       ===================================================================== */
-    .login-header {
-        background: linear-gradient(135deg, #B19CD9 0%, #40E0D0 100%);
-        padding: 2rem;
-        border-radius: 16px;
-        margin-bottom: 2rem;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        text-align: center;
-    }
-
-    .login-header-logo {
-        max-width: min(240px, 85%);
-        max-height: 240px;
-        width: auto;
-        height: auto;
-        border-radius: 12px;
-        margin: 0 auto 0.9rem auto;
-        display: block;
-        object-fit: contain;
-        box-shadow: 0 3px 12px rgba(0,0,0,0.15);
-    }
-
-    .login-header-title {
-        color: #FFFFFF;
-        font-size: 2.1rem;
-        font-weight: 700;
-        margin-top: 0.6rem;
-        font-family: Poppins, sans-serif;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-
-    .login-header-subtitle {
-        color: rgba(255,255,255,0.95);
-        margin-top: 0.4rem;
-        font-size: 1.05rem;
-    }
-
-    .login-scope .login-hero {
-        --hero-logo: none;
-        background-image: linear-gradient(135deg, #0E0B08 0%, #251A12 100%), var(--hero-logo);
-        background-repeat: no-repeat;
-        background-position: right 24px bottom 18px;
-        background-size: 240px;
-        border: 1px solid rgba(201, 162, 39, 0.35);
-        border-radius: 22px;
-        padding: 2.7rem;
-        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.25);
-    }
-
-    .login-scope .login-badge {
-        display: inline-block;
-        padding: 0.35rem 0.9rem;
-        border-radius: 999px;
-        background: linear-gradient(135deg, var(--lux-primary) 0%, #E3C873 100%);
-        color: #1A140F;
-        font-size: 0.85rem;
-        font-weight: 700;
-        letter-spacing: 0.4px;
-        margin-bottom: 1.1rem;
-    }
-
-    .login-scope .login-hero h1 {
-        color: var(--lux-text-light);
-        font-size: 2.35rem;
-        margin: 0 0 0.8rem 0;
-        line-height: 1.15;
-        font-weight: 700;
-    }
-
-    .login-scope .login-hero p {
-        color: rgba(242, 236, 227, 0.85);
-        font-size: 1.02rem;
-        margin: 0 0 1.3rem 0;
-    }
-
-    .login-scope .login-list {
-        margin: 0;
-        padding-left: 1.2rem;
-        color: rgba(242, 236, 227, 0.88);
-    }
-
-    .login-scope .login-list li {
-        margin-bottom: 0.6rem;
-    }
+@st.cache_data(show_spinner=False)
+def _load_wallpaper_data_uri(wallpaper_path: str):
+    if not wallpaper_path:
+        return None
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    image_path = os.path.join(project_root, wallpaper_path)
+    if not os.path.exists(image_path):
+        return None
+    try:
+        with open(image_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode("utf-8")
+        mime = mimetypes.guess_type(image_path)[0] or "image/png"
+        return f"data:{mime};base64,{img_b64}"
+    except Exception:
+        return None
 
 
-    .login-scope [data-testid="column"]:nth-child(2) > div {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        width: 100% !important;
-    }
-
-    .login-scope .login-card {
-        background: var(--lux-accent);
-        border-radius: 22px;
-        border: 1px solid rgba(201, 162, 39, 0.3);
-        padding: 2.8rem;
-        box-shadow: 0 16px 32px rgba(0, 0, 0, 0.18);
-        text-align: center;
-        max-width: 560px;
-        min-width: 380px;
-        margin: 0 auto;
-        width: 100%;
-    }
-
-    .login-scope .login-card h3 {
-        font-size: 2.1rem !important;
-        font-weight: 700 !important;
-        margin-bottom: 0.5rem !important;
-    }
-
-    .login-scope .login-card h4 {
-        font-size: 1.35rem !important;
-        font-weight: 600 !important;
-        margin-top: 1rem !important;
-        margin-bottom: 1rem !important;
-    }
-
-    .login-scope .login-card [data-testid="stForm"] label,
-    .login-scope .login-card [data-testid="stForm"] p {
-        font-size: 1.15rem !important;
-    }
-
-    .login-scope .login-muted {
-        color: rgba(26, 20, 15, 0.7);
-        font-size: 1.2rem;
-        margin-top: -0.6rem;
-        margin-bottom: 1.2rem;
-        line-height: 1.45;
-    }
-
-    .login-scope .login-support {
-        margin-top: 1.2rem;
-        padding-top: 1rem;
-        border-top: 1px solid rgba(201, 162, 39, 0.2);
-        color: rgba(26, 20, 15, 0.75);
-        font-size: 1.12rem;
-        text-align: center;
-        line-height: 1.5;
-    }
-
-    .login-scope .login-company {
-        margin-top: 1.6rem;
-        background: rgba(20, 16, 12, 0.7);
-        border: 1px solid rgba(201, 162, 39, 0.3);
-        border-radius: 18px;
-        padding: 1.5rem;
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-    }
-
-    .login-scope .login-company h3 {
-        margin: 0 0 0.8rem 0;
-        font-size: 1.1rem;
-        color: var(--lux-text-light);
-    }
-
-    .login-scope .login-company p {
-        margin: 0.35rem 0;
-        color: rgba(242, 236, 227, 0.82);
-    }
-
-    .login-scope .stTextInput > div > div input,
-    .login-scope .stPasswordInput > div > div input {
-        border-radius: 12px !important;
-        border: 1px solid rgba(201, 162, 39, 0.35) !important;
-        padding: 0.75rem 1rem !important;
-        background: #FFFFFF !important;
-        font-size: 1.1rem !important;
-    }
-
-    .login-scope .stTextInput > div > div input:focus,
-    .login-scope .stPasswordInput > div > div input:focus {
-        border-color: var(--lux-primary) !important;
-        box-shadow: 0 0 0 0.15rem rgba(201, 162, 39, 0.25) !important;
-    }
-
-    .login-scope .stButton > button,
-    .login-scope button[kind="primary"],
-    .login-scope button[data-baseweb="button"][kind="primary"] {
-        background: linear-gradient(135deg, var(--lux-primary) 0%, #E3C873 100%) !important;
-        color: #1A140F !important;
-        border: none !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.2px;
-        font-size: 1.08rem !important;
-        padding: 0.65rem 1.25rem !important;
-    }
-
-    .login-scope .stButton > button:hover,
-    .login-scope button[kind="primary"]:hover,
-    .login-scope button[data-baseweb="button"][kind="primary"]:hover {
-        background: linear-gradient(135deg, #E3C873 0%, var(--lux-primary) 100%) !important;
-        color: #1A140F !important;
-        opacity: 0.95;
-    }
-
-    </style>
+HIDE_ST_STYLE = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+.stButton > button {
+    background: linear-gradient(135deg, #B19CD9 0%, #40E0D0 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 12px !important;
+}
+.login-scope .login-card {
+    background: var(--lux-accent);
+    border-radius: 22px;
+    padding: 2.8rem;
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.18);
+    max-width: 560px;
+    margin: 0 auto;
+}
+.login-scope .login-muted { color: rgba(26, 20, 15, 0.7); font-size: 1.2rem; }
+.login-scope .login-support { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid rgba(201, 162, 39, 0.2); }
+</style>
 """
 
 
 def afficher_page_connexion():
-    """
-    FONCTION PRINCIPALE DE LA PAGE DE CONNEXION
-    
-    POURQUOI ? Pour permettre à l'utilisateur de se connecter
-    COMMENT ? Détection automatique de l'environnement :
-        1. Sur Render : Connexion automatique via variables d'environnement
-        2. En local : Connexion automatique via config.py (PostgreSQL local)
-        3. Authentification : L'utilisateur entre son code couturier et mot de passe
-    
-    UTILISÉ OÙ ? Appelé dans app.py quand l'user n'est pas authentifié
-    """
-    # Appliquer les styles CSS (doit être dans la fonction, pas au niveau module,
-    # pour éviter les erreurs d'import sur Render : st.* avant set_page_config)
     st.markdown(_get_lux_vars_style(), unsafe_allow_html=True)
-    st.markdown(hide_st_style, unsafe_allow_html=True)
-
+    st.markdown(HIDE_ST_STYLE, unsafe_allow_html=True)
     content = load_site_content()
-    
-    # ========================================================================
-    # FOND D'ÉCRAN PLEIN ÉCRAN (image en arrière-plan, formulaire par-dessus)
-    # ========================================================================
-    
-    # Fond d'écran : cache pour éviter 4-13 s de chargement à chaque requête
-    wallpaper_path = APP_CONFIG.get('wallpaper_url')
+    wallpaper_path = APP_CONFIG.get("wallpaper_url")
     data_uri = _load_wallpaper_data_uri(wallpaper_path) if wallpaper_path else None
     if data_uri:
         st.markdown(f"""
             <style>
-            .stApp {{
-                background-image: url("{data_uri}") !important;
-                background-size: cover !important;
-                background-position: center !important;
-                background-attachment: fixed !important;
-                background-repeat: no-repeat !important;
-                background-color: transparent !important;
-                min-height: 100vh;
-            }}
-            .main .block-container {{
-                background: transparent !important;
-                padding-top: 2rem;
-                max-width: 1200px;
-            }}
+            .stApp {{ background-image: url("{data_uri}") !important; background-size: cover !important;
+                background-position: center !important; min-height: 100vh; }}
+            .main .block-container {{ background: transparent !important; }}
             </style>
         """, unsafe_allow_html=True)
-    
-    # DATABASE_URL obligatoire (aucune config locale)
-    if not is_db_available():
-        st.error(
-            "❌ **Variable DATABASE_URL non configurée.**\n\n"
-            "Sur Render : ajoutez la variable d'environnement DATABASE_URL "
-            "(Dashboard → Environment).\n\n"
-            "En local : créez un fichier `.env` avec :\n"
-            "`DATABASE_URL=postgresql://user:password@localhost:5432/db_couturier`"
-        )
-        st.stop()
-    
-    # ========================================================================
-    # AUTHENTIFICATION DU COUTURIER (déclenchée uniquement par soumission du formulaire)
-    # ========================================================================
-    
-    # Si on arrive ici, c'est qu'on est déjà connecté à la base de données
-    # Maintenant, le couturier doit entrer son code pour s'authentifier
-    
-    # ====================================================================
-    # FORMULAIRE D'AUTHENTIFICATION AVEC CODE COUTURIER
-    # ====================================================================
-    
-    # POURQUOI ? Pour vérifier l'identité du couturier
-    # COMMENT ? L'user entre son code + password, on vérifie dans la base de données
     st.markdown('<div class="login-scope">', unsafe_allow_html=True)
-    
     _, form_col, _ = st.columns([1, 1.3, 1], gap="large")
-
     with form_col:
         st.markdown('<div class="login-card">', unsafe_allow_html=True)
         st.markdown("### Connexion sécurisée")
         st.markdown(
-            "<div class='login-muted'>Accédez à votre atelier et gérez vos commandes en toute sérénité.</div>",
-            unsafe_allow_html=True
+            "<div class='login-muted'>Accédez à votre atelier et gérez vos commandes.</div>",
+            unsafe_allow_html=True,
         )
-        
         with st.form("auth_form", clear_on_submit=False):
             st.markdown("#### 🔑 Identifiants de connexion")
-            
-            # Champ de saisie du code couturier
-            code_couturier = st.text_input(
-                "Code Couturier *",
-                placeholder="Ex: COUT001",
-                help="Votre code d'identification unique",
-                key="code_input"
-            )
-            
-            # Champ de saisie du mot de passe
-            password_input = st.text_input(
-                "Mot de passe *",
-                type="password",
-                placeholder="Entrez votre mot de passe",
-                help="Votre mot de passe sécurisé",
-                key="password_input"
-            )
-            
-            # Bouton de soumission
-            submit_auth = st.form_submit_button(
-                "🔓 Se connecter",
-                type="primary"
-            )
-            
-            # ================================================================
-            # TRAITEMENT DE L'AUTHENTIFICATION
-            # ================================================================
-            
+            code_couturier = st.text_input("Code Couturier *", placeholder="Ex: COUT001", key="code_input")
+            password_input = st.text_input("Mot de passe *", type="password", placeholder="Entrez votre mot de passe", key="password_input")
+            submit_auth = st.form_submit_button("🔓 Se connecter", type="primary")
             if submit_auth:
                 if not code_couturier:
                     st.error("⚠️ Veuillez entrer votre code utilisateur")
                 elif not password_input:
                     st.error("⚠️ Veuillez entrer votre mot de passe")
                 else:
-                    with st.spinner("Vérification des identifiants..."):
-                        try:
-                            db = get_db()
-                            if not db or not db.is_connected():
-                                st.error("❌ Impossible de se connecter à la base de données. Vérifiez DATABASE_URL.")
-                            else:
-                                from controllers.commande_controller import CommandeController
-                                from models.database import ChargesModel
-                                auth_controller = AuthController(db)
-                                auth_controller.initialiser_tables()
-                                CommandeController(db).initialiser_tables()
-                                ChargesModel(db).creer_tables()
-                                succes, donnees, message = auth_controller.authentifier(code_couturier, password_input)
-                                if succes:
-                                    st.session_state.db_connection = db
-                                    st.session_state.authentifie = True
-                                    st.session_state.couturier_data = donnees
-                                    role_normalise = str(donnees.get("role", "")).upper().strip()
-                                    st.session_state.page = "super_admin_dashboard" if role_normalise == "SUPER_ADMIN" else "nouvelle_commande"
-                                    st.success(f"✅ {message}")
-                                    st.balloons()
-                                    st.rerun()
-                                else:
-                                    st.error(f"❌ {message}")
-                        except Exception as e:
-                            st.error(f"❌ Erreur : {e}")
-        
+                    with st.spinner("Vérification..."):
+                        from services.auth_service import authenticate
+                        succes, donnees, message = authenticate(code_couturier.strip(), password_input)
+                        if succes:
+                            st.session_state.authenticated = True
+                            st.session_state.user = donnees
+                            role_n = str(donnees.get("role", "")).upper().strip()
+                            st.session_state.page = "super_admin_dashboard" if role_n == "SUPER_ADMIN" else "nouvelle_commande"
+                            st.success(f"✅ {message}")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {message}")
         support_text = content.get("support_text", "")
         if support_text:
-            st.markdown(f"""
-                <div class="login-support">
-                    {support_text}
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'<div class="login-support">{support_text}</div>', unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
-    
     st.markdown("</div>", unsafe_allow_html=True)
-

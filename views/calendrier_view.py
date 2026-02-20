@@ -22,17 +22,17 @@ def afficher_page_calendrier(onglet_admin: bool = False):
     Page unifiée : Modèles réalisés + Calendrier.
     Si onglet_admin=True, affiche sans le header (intégré dans Administration).
     """
-    if not st.session_state.get('authentifie', False):
+    if not st.session_state.get('authenticated', False):
         st.error("❌ Vous devez être connecté pour accéder à cette page")
         return
-    if not st.session_state.get('db_connection'):
+    if not st.session_state.get('db'):
         st.error("❌ Connexion à la base de données requise")
         return
 
-    couturier_data = st.session_state.get('couturier_data')
-    commande_model = CommandeModel(st.session_state.db_connection)
-    couturier_model = CouturierModel(st.session_state.db_connection)
-    salon_model = SalonModel(st.session_state.db_connection)
+    couturier_data = st.session_state.get('user')
+    commande_model = CommandeModel(st.session_state.db)
+    couturier_model = CouturierModel(st.session_state.db)
+    salon_model = SalonModel(st.session_state.db)
     salon_id = obtenir_salon_id(couturier_data)
     couturier_id = obtenir_couturier_id(couturier_data)
     est_admin_user = est_admin(couturier_data)
@@ -42,7 +42,7 @@ def afficher_page_calendrier(onglet_admin: bool = False):
 
     # Rappels automatiques (exécutés 1 fois par jour)
     from controllers.rappel_service import executer_rappels_automatiques
-    nb_rappels, msg_rappels = executer_rappels_automatiques(st.session_state.db_connection)
+    nb_rappels, msg_rappels = executer_rappels_automatiques(st.session_state.db)
     if msg_rappels:
         if nb_rappels > 0:
             st.success(f"✅ {msg_rappels}")

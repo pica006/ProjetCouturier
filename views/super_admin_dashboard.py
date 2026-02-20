@@ -31,15 +31,14 @@ def afficher_dashboard_super_admin():
     from utils.page_header import afficher_header_page
     afficher_header_page("🔧 SUPER ADMINISTRATION", "Vue 360° sur tous les salons de couture")
     
-    if not st.session_state.get("db_connection"):
+    if not st.session_state.get("db"):
         st.error("❌ Connexion à la base de données non établie")
         return
-    
-    # Initialiser les contrôleurs
-    super_admin_ctrl = SuperAdminController(st.session_state.db_connection)
-    salon_model = SalonModel(st.session_state.db_connection)
-    couturier_model = CouturierModel(st.session_state.db_connection)
-    commande_model = CommandeModel(st.session_state.db_connection)
+    db = st.session_state.db
+    super_admin_ctrl = SuperAdminController(db)
+    salon_model = SalonModel(db)
+    couturier_model = CouturierModel(db)
+    commande_model = CommandeModel(db)
     
     # ========================================================================
     # ONGLETS PRINCIPAUX
@@ -139,10 +138,9 @@ def afficher_vue_ensemble(super_admin_ctrl, salon_model):
             
             # Tester la connexion et la table
             try:
-                cursor = st.session_state.db_connection.get_connection().cursor()
-                
-                # Vérifier si la table existe
-                if st.session_state.db_connection.db_type == 'mysql':
+                db = st.session_state.db
+                cursor = db.get_connection().cursor()
+                if db.db_type == 'mysql':
                     cursor.execute("SHOW TABLES LIKE 'salons'")
                 else:  # PostgreSQL
                     cursor.execute("""
@@ -1287,8 +1285,8 @@ def afficher_demandes_globales_super_admin(commande_model, salon_model):
     # Identifiant du super admin pour tracer la validation
     super_admin_id = None
     try:
-        if st.session_state.get('couturier_data'):
-            super_admin_id = st.session_state.couturier_data.get('id')
+        if st.session_state.get("user"):
+            super_admin_id = st.session_state.user.get("id")
     except Exception:
         pass
 

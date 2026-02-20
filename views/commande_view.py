@@ -21,15 +21,15 @@ def afficher_page_commande():
     afficher_header_page("➕ Nouvelle Commande", "Créer une nouvelle commande pour un client")
     
     # Initialiser les contrôleurs
-    db = st.session_state.db_connection
+    db = st.session_state.db
     commande_controller = CommandeController(db)
     pdf_controller = PDFController(db_connection=db)
 
     # Récupérer la configuration SMTP du salon courant (multi-tenant)
     smtp_config = None
     try:
-        if st.session_state.get("couturier_data"):
-            salon_id = obtenir_salon_id(st.session_state.couturier_data)
+        if st.session_state.get("user"):
+            salon_id = obtenir_salon_id(st.session_state.user)
             if salon_id:
                 salon_model = SalonModel(db)
                 smtp_config = salon_model.obtenir_config_email_salon(salon_id)
@@ -409,7 +409,7 @@ def afficher_page_commande():
                     commande_info['model_image_name'] = model_image.name
                     
                     succes, commande_id, message = commande_controller.creer_commande(
-                        st.session_state.couturier_data['id'],
+                        st.session_state.user['id'],
                         client_info,
                         commande_info
                     )
@@ -451,7 +451,7 @@ def afficher_page_commande():
                         
                         # Préparer les données pour le PDF
                         # Récupérer les données du couturier depuis la session
-                        couturier_data = st.session_state.couturier_data
+                        couturier_data = st.session_state.user
                         
                         # Utiliser commande_data si disponible (avec les valeurs de la BDD), sinon utiliser les données du formulaire
                         if commande_data:

@@ -51,27 +51,27 @@ def afficher_page_administration():
     #afficher_header_page("🔧 Administration", "Vue 360° de votre entreprise")
     
     # Vérification de l'authentification
-    if not st.session_state.get('authentifie', False):
+    if not st.session_state.get('authenticated', False):
         st.error("❌ Vous devez être connecté pour accéder à cette page")
         return
     
-    if not st.session_state.get('db_connection'):
+    if not st.session_state.get('db'):
         st.error("❌ Connexion à la base de données requise")
         return
     
     # Vérification du rôle admin
-    couturier_data = st.session_state.get('couturier_data')
+    couturier_data = st.session_state.get('user')
     if not est_admin(couturier_data):
         st.error("❌ Accès refusé. Cette page est réservée aux administrateurs.")
         st.info("💡 Contactez un administrateur pour obtenir les droits d'accès.")
         return
     
     # Initialisation des modèles
-    charges_model = ChargesModel(st.session_state.db_connection)
-    commande_model = CommandeModel(st.session_state.db_connection)
-    couturier_model = CouturierModel(st.session_state.db_connection)
-    client_model = ClientModel(st.session_state.db_connection)
-    salon_model = SalonModel(st.session_state.db_connection)
+    charges_model = ChargesModel(st.session_state.db)
+    commande_model = CommandeModel(st.session_state.db)
+    couturier_model = CouturierModel(st.session_state.db)
+    client_model = ClientModel(st.session_state.db)
+    salon_model = SalonModel(st.session_state.db)
     salon_id_admin = obtenir_salon_id(couturier_data)
     
     # Récupérer les informations du salon
@@ -188,7 +188,7 @@ def afficher_tableau_de_bord_admin(
     st.markdown("— Même contenu que l'onglet **Modèles réalisés** : filtre par couturier, répartition par modèle, graphiques, galerie photos.")
     st.markdown("---")
 
-    couturier_id_admin = st.session_state.get("couturier_data", {}).get("id")
+    couturier_id_admin = st.session_state.get("user", {}).get("id")
     from views.calendrier_view import _afficher_modeles_realises
     _afficher_modeles_realises(
         commande_model,
@@ -1127,16 +1127,16 @@ def _generer_pdf_table_charges(titre: str, sous_titre: str, df_table: pd.DataFra
         # Récupérer le logo du salon (depuis la BDD) pour l'en-tête du PDF
         salon_id = None
         try:
-            if st.session_state.get('couturier_data'):
+            if st.session_state.get('user'):
                 from utils.role_utils import obtenir_salon_id
-                salon_id = obtenir_salon_id(st.session_state.couturier_data)
+                salon_id = obtenir_salon_id(st.session_state.user)
         except Exception:
             pass
 
         logo_img = None
-        if salon_id and st.session_state.get('db_connection'):
+        if salon_id and st.session_state.get('db'):
             try:
-                logo_model = AppLogoModel(st.session_state.db_connection)
+                logo_model = AppLogoModel(st.session_state.db)
                 logo_data = logo_model.recuperer_logo(salon_id)
                 if logo_data and logo_data.get('logo_data'):
                     logo_bytes = logo_data['logo_data']
@@ -1148,8 +1148,8 @@ def _generer_pdf_table_charges(titre: str, sous_titre: str, df_table: pd.DataFra
         # Préparer les lignes de pied de page (informations du salon)
         footer_lines = None
         try:
-            if salon_id and st.session_state.get('db_connection'):
-                salon_model = SalonModel(st.session_state.db_connection)
+            if salon_id and st.session_state.get('db'):
+                salon_model = SalonModel(st.session_state.db)
                 salon = salon_model.obtenir_salon_by_id(salon_id)
                 if salon:
                     nom = salon.get('nom_salon') or salon_id
@@ -1288,8 +1288,8 @@ def afficher_calcul_impots_admin(charges_model: ChargesModel, commande_model: Co
     # Récupérer le salon_id de l'admin pour le filtrage multi-tenant
     salon_id_admin = None
     try:
-        if st.session_state.get('couturier_data'):
-            salon_id_admin = obtenir_salon_id(st.session_state.couturier_data)
+        if st.session_state.get('user'):
+            salon_id_admin = obtenir_salon_id(st.session_state.user)
     except:
         pass
     
@@ -1970,7 +1970,7 @@ def afficher_gestion_logo(admin_data: Dict):
     from utils.role_utils import obtenir_salon_id
     
     # Initialiser le modèle
-    logo_model = AppLogoModel(st.session_state.db_connection)
+    logo_model = AppLogoModel(st.session_state.db)
     
     # Créer la table si elle n'existe pas
     logo_model.creer_tables()

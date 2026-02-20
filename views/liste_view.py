@@ -43,12 +43,12 @@ def afficher_page_liste_commandes():
     with st.container():
         
         # Initialiser les contrôleurs
-        commande_controller = CommandeController(st.session_state.db_connection)
-        pdf_controller = PDFController(db_connection=st.session_state.db_connection)
+        commande_controller = CommandeController(st.session_state.db)
+        pdf_controller = PDFController(db_connection=st.session_state.db)
         
         # Récupérer les informations de l'utilisateur connecté
         from utils.role_utils import obtenir_salon_id
-        couturier_data = st.session_state.couturier_data
+        couturier_data = st.session_state.user
         salon_id = obtenir_salon_id(couturier_data)
         code_couturier = couturier_data.get('code_couturier') if couturier_data else None
         
@@ -56,7 +56,7 @@ def afficher_page_liste_commandes():
         if 'commandes_liste' not in st.session_state:
             with st.spinner("Chargement des commandes..."):
                 st.session_state.commandes_liste = commande_controller.lister_commandes_couturier(
-                    st.session_state.couturier_data['id']
+                    st.session_state.user['id']
                 )
         
         commandes = st.session_state.commandes_liste

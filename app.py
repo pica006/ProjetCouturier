@@ -19,7 +19,7 @@ from views.super_admin_dashboard import afficher_dashboard_super_admin
 from utils.role_utils import est_admin
 from utils.bottom_nav import render_bottom_nav
 from utils.permissions import est_super_admin
-from database import get_db
+from init_db import init_db
 from config import APP_CONFIG, PAGE_BACKGROUND_IMAGES
 
 
@@ -629,14 +629,10 @@ def get_page_background_html(page_id):
 
 
 def initialiser_session_state():
-    """
-    Initialise TOUTES les clés session_state au début de app.py.
-    Ne jamais accéder à st.session_state sans clé existante.
-    """
     defaults = {
-        "db_connection": None,
-        "authentifie": False,
-        "couturier_data": None,
+        "db": None,
+        "authenticated": False,
+        "user": None,
         "page": "connexion",
         "prix_total_form": 0.0,
         "avance_form": 0.0,
@@ -657,11 +653,6 @@ def initialiser_session_state():
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
-    # Si authentifié mais db_connection perdue (ex: refresh), restaurer depuis cache
-    if st.session_state.get("authentifie") and not st.session_state.get("db_connection"):
-        db = get_db()
-        if db:
-            st.session_state["db_connection"] = db
 
 
 def afficher_header_app():
@@ -672,11 +663,11 @@ def afficher_header_app():
     logo_base64 = None
     logo_mime = None
     try:
-        db = st.session_state.get("db_connection") or get_db()
-        if db and st.session_state.get("couturier_data"):
+        db = st.session_state.get("db")
+        if db and st.session_state.get("user"):
             from models.database import AppLogoModel
             from utils.role_utils import obtenir_salon_id
-            couturier_data = st.session_state.get("couturier_data")
+            couturier_data = st.session_state.get("user")
             salon_id = obtenir_salon_id(couturier_data)
             if salon_id:
                 logo_model = AppLogoModel(db)
@@ -722,19 +713,13 @@ def afficher_header_app():
 
 
 def afficher_sidebar():
-    """Affiche la barre latérale avec navigation"""
     with st.sidebar:
-        if st.session_state.authentifie:
-            # Marqueur pour le JS : page courante (pour style bouton actif)
+        if st.session_state.authenticated:
             current_page = st.session_state.get("page", "connexion")
-            st.markdown(
-                f'<div id="sidebar-current-page" data-page="{current_page}" style="display:none;"></div>',
-                unsafe_allow_html=True,
-            )
-            # Informations du couturier connecté
-            st.success(f"**Connecté:** {st.session_state.couturier_data['prenom']} {st.session_state.couturier_data['nom']}")
-            role_display = st.session_state.couturier_data.get('role', 'employe')
-            st.info(f"**Code:** {st.session_state.couturier_data['code_couturier']} | **Rôle:** {role_display}")
+            st.markdown(f'<div id="sidebar-current-page" data-page="{current_page}" style="display:none;"></div>', unsafe_allow_html=True)
+            u = st.session_state.user
+            st.success(f"**Connecté:** {u['prenom']} {u['nom']}")
+            st.info(f"**Code:** {u['code_couturier']} | **Rôle:** {u.get('role', 'employe')}")
             st.markdown("---")
             
             # Menu SUPER ADMINISTRATION (uniquement pour SUPER_ADMIN) - EN PREMIER
@@ -780,8 +765,7 @@ def afficher_sidebar():
                 st.session_state.page = 'calendrier'
                 st.rerun()
             
-            # Menu Administration (uniquement pour les admins normaux, pas SUPER_ADMIN)
-            if est_admin(st.session_state.couturier_data) and not est_super_admin():
+            if est_admin(st.session_state.user) and not est_super_admin():
                 st.markdown("---")
                 st.markdown("### 👑 Administration")
                 if st.button("👑 Administration", width='stretch'):
@@ -790,11 +774,10 @@ def afficher_sidebar():
             
             st.markdown("---")
             
-            # Bouton de déconnexion (pas de disconnect - connexion partagée via cache)
-            if st.button("🚪 Déconnexion", width='stretch', key="btn_deconnexion"):
-                st.session_state.authentifie = False
-                st.session_state.couturier_data = None
-                st.session_state.db_connection = None
+            if st.button("🚪 Déconnexion", width="stretch", key="btn_deconnexion"):
+                st.session_state.authenticated = False
+                st.session_state.user = None
+                st.session_state.db = None
                 st.session_state.page = "connexion"
                 st.rerun()
         else:
@@ -817,11 +800,10 @@ def afficher_header_principal():
 
 
 def main():
-    """Fonction principale de l'application"""
     initialiser_session_state()
-    
-    # Sidebar : image de fond (nav.png) uniquement sur la page de connexion
-    sidebar_bg_css = sidebar_bg_css_with_image if not st.session_state.authentifie else SIDEBAR_BG_PLAIN
+    if st.session_state.db is None:
+        st.session_state.db = init_db()
+    sidebar_bg_css = sidebar_bg_css_with_image if not st.session_state.authenticated else SIDEBAR_BG_PLAIN
     st.markdown(_sidebar_styles_css(sidebar_bg_css), unsafe_allow_html=True)
     
     # Afficher la sidebar
@@ -830,16 +812,11 @@ def main():
     # Header minimaliste (optionnel, peut être commenté)
     # afficher_header_principal()
     
-    if not st.session_state.authentifie:
+    if not st.session_state.db:
+        st.error("❌ DATABASE_URL non configurée. Définissez-la dans les variables d'environnement.")
+        st.stop()
+    if not st.session_state.authenticated:
         afficher_page_connexion()
-    elif not st.session_state.get("db_connection"):
-        st.error("❌ Connexion base de données perdue. Veuillez vous reconnecter.")
-        if st.button("Retour à la connexion"):
-            st.session_state.authentifie = False
-            st.session_state.couturier_data = None
-            st.session_state.db_connection = None
-            st.session_state.page = "connexion"
-            st.rerun()
     else:
         # Pages authentifiées : image de fond selon la page (calque fixe + style)
         page_bg_html = get_page_background_html(st.session_state.page)
@@ -882,9 +859,8 @@ def main():
             afficher_page_calendrier(onglet_admin=False)
         elif st.session_state.page == 'dashboard':
             afficher_page_dashboard()
-        elif st.session_state.page == 'administration':
-            # Vérifier que l'utilisateur est admin
-            if est_admin(st.session_state.couturier_data):
+        elif st.session_state.page == "administration":
+            if est_admin(st.session_state.user):
                 afficher_page_administration()
             else:
                 st.error("❌ Accès refusé. Cette page est réservée aux administrateurs.")

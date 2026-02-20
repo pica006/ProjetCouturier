@@ -54,16 +54,9 @@ def obtenir_permissions_utilisateur(user_data: Dict) -> Dict:
 
 
 def get_salon_filter() -> Optional[int]:
-    """
-    Récupère le filtre salon actuel selon l'utilisateur connecté
-    
-    Returns:
-        salon_id pour filtrer, ou None pour voir tout (SUPER_ADMIN)
-    """
-    if 'couturier_data' not in st.session_state:
+    if "user" not in st.session_state or not st.session_state.user:
         return None
-    
-    user = st.session_state.couturier_data
+    user = st.session_state.user
     role = user.get('role', 'employe')
     
     if role == 'SUPER_ADMIN':
@@ -75,10 +68,9 @@ def get_salon_filter() -> Optional[int]:
 
 
 def est_super_admin() -> bool:
-    """Vérifie si l'utilisateur est SUPER_ADMIN"""
-    if 'couturier_data' not in st.session_state:
+    if "user" not in st.session_state or not st.session_state.user:
         return False
-    role = st.session_state.couturier_data.get('role', '')
+    role = st.session_state.user.get("role", "")
     # Normaliser le rôle pour gérer les variations de casse
     role_normalise = str(role).upper().strip()
     return role_normalise == 'SUPER_ADMIN'
@@ -95,9 +87,8 @@ def peut_creer_admin() -> bool:
 
 
 def peut_creer_employe() -> bool:
-    """Vérifie si l'utilisateur peut créer des employés"""
-    if 'couturier_data' not in st.session_state:
+    if "user" not in st.session_state or not st.session_state.user:
         return False
-    role = st.session_state.couturier_data.get('role')
+    role = st.session_state.user.get("role")
     return role == 'admin'
 
