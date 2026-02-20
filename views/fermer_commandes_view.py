@@ -18,7 +18,7 @@ def afficher_page_fermer_commandes():
     afficher_header_page("🔒 Fermer mes commandes", "Gérez les paiements et demandez la fermeture de vos commandes")
     
     # Récupérer les données du couturier depuis la session
-    couturier_data = st.session_state.get('couturier_data')
+    couturier_data = st.session_state.get("user")
     if not couturier_data:
         st.error("❌ Erreur : Vous devez être connecté")
         return
@@ -39,15 +39,14 @@ def afficher_page_fermer_commandes():
         return
     
     is_admin_user = est_admin(couturier_data)
-    
-    db = st.session_state.db_connection
+    db = st.session_state.db
     commande_model = CommandeModel(db)
 
     # Configurer l'email pour le salon courant
     smtp_config = None
     try:
-        if st.session_state.get("couturier_data"):
-            salon_id = obtenir_salon_id(st.session_state.couturier_data)
+        if st.session_state.get("user"):
+            salon_id = obtenir_salon_id(st.session_state.user)
             if salon_id:
                 salon_model = SalonModel(db)
                 smtp_config = salon_model.obtenir_config_email_salon(salon_id)
@@ -97,7 +96,7 @@ def afficher_page_fermer_commandes():
         
         # Récupérer les commandes du user avec avance > 0 ET reste > 0
         try:
-            cursor = st.session_state.db_connection.get_connection().cursor()
+            cursor = st.session_state.db.get_connection().cursor()
             query = """
                 SELECT c.id, c.modele, c.prix_total, c.avance, c.reste, c.statut, 
                        c.date_creation, c.date_livraison,
@@ -113,7 +112,7 @@ def afficher_page_fermer_commandes():
             """
             params = [couturier_id, salon_id_user]
             
-            db_type = st.session_state.db_connection.db_type
+            db_type = st.session_state.db.db_type
             if date_debut_paiements:
                 if db_type == 'mysql':
                     query += " AND DATE(c.date_creation) >= %s"
@@ -258,7 +257,7 @@ def afficher_page_fermer_commandes():
                                     # Mettre à jour le statut si nécessaire
                                     if success:
                                         try:
-                                            connection = st.session_state.db_connection.get_connection()
+                                            connection = st.session_state.db.get_connection()
                                             cursor = connection.cursor()
                                             # Si le reste est à 0, marquer comme "Terminé" (tout l'argent reçu)
                                             if nouveau_reste <= 0:
@@ -309,7 +308,7 @@ def afficher_page_fermer_commandes():
         couturier_id_filter = None
         if is_admin_user and salon_id_user:
             from models.database import CouturierModel
-            couturier_model = CouturierModel(st.session_state.db_connection)
+            couturier_model = CouturierModel(st.session_state.db)
             couturiers_salon = couturier_model.lister_tous_couturiers(salon_id=salon_id_user)
             
             options_couturiers = ["👥 Tous les couturiers"] + [
@@ -334,14 +333,14 @@ def afficher_page_fermer_commandes():
         
         # Récupérer les commandes terminées (reste = 0) mais pas encore livrées
         from models.database import CouturierModel
-        couturier_model = CouturierModel(st.session_state.db_connection)
+        couturier_model = CouturierModel(st.session_state.db)
         
         # Récupérer les commandes selon le rôle
         if is_admin_user:
             # Admin : voir toutes les commandes terminées du salon (reste = 0, statut = 'Terminé')
             if salon_id_user:
                 try:
-                    cursor = st.session_state.db_connection.get_connection().cursor()
+                    cursor = st.session_state.db.get_connection().cursor()
                     query = """
                         SELECT c.id, c.modele, c.prix_total, c.avance, c.reste, c.statut, 
                                c.date_creation, c.date_livraison,
@@ -356,7 +355,7 @@ def afficher_page_fermer_commandes():
                     """
                     params = [salon_id_user]
                     
-                    db_type = st.session_state.db_connection.db_type
+                    db_type = st.session_state.db.db_type
                     if date_debut_terminees:
                         if db_type == 'mysql':
                             query += " AND DATE(c.date_creation) >= %s"
@@ -418,7 +417,7 @@ def afficher_page_fermer_commandes():
         else:
             # Employé : voir toutes ses commandes totalement payées (reste = 0, statut = 'Terminé')
             try:
-                cursor = st.session_state.db_connection.get_connection().cursor()
+                cursor = st.session_state.db.get_connection().cursor()
                 query = """
                     SELECT c.id, c.modele, c.prix_total, c.avance, c.reste, c.statut, 
                            c.date_creation, c.date_livraison,
@@ -433,7 +432,7 @@ def afficher_page_fermer_commandes():
                 """
                 params = [couturier_id, salon_id_user]
                 
-                db_type = st.session_state.db_connection.db_type
+                db_type = st.session_state.db.db_type
                 if date_debut_terminees:
                     if db_type == 'mysql':
                         query += " AND DATE(c.date_creation) >= %s"
@@ -489,7 +488,7 @@ def afficher_page_fermer_commandes():
                               AND commande_id IN ({placeholders})
                             GROUP BY commande_id
                         """
-                        cursor = st.session_state.db_connection.get_connection().cursor()
+                        cursor = st.session_state.db.get_connection().cursor()
                         cursor.execute(hist_query, tuple([couturier_id] + ids))
                         for row in cursor.fetchall():
                             historique_counts[row[0]] = {
@@ -560,7 +559,7 @@ def afficher_page_fermer_commandes():
                     total_demandes = 0
                     derniere_demande_status = None
                     try:
-                        cursor = st.session_state.db_connection.get_connection().cursor()
+                        cursor = st.session_state.db.get_connection().cursor()
                         cursor.execute(
                             """
                             SELECT COUNT(*), MAX(statut_validation)
@@ -603,7 +602,7 @@ def afficher_page_fermer_commandes():
                             width='stretch'
                         ):
                             try:
-                                connection = st.session_state.db_connection.get_connection()
+                                connection = st.session_state.db.get_connection()
                                 cursor = connection.cursor()
                                 cursor.execute(
                                     "UPDATE commandes SET statut = 'Livré et payé', date_fermeture = NOW() WHERE id = %s",
@@ -751,7 +750,7 @@ def afficher_page_fermer_commandes():
         couturier_id_filter = None
         if is_admin_user and salon_id_user:
             from models.database import CouturierModel
-            couturier_model = CouturierModel(st.session_state.db_connection)
+            couturier_model = CouturierModel(st.session_state.db)
             couturiers_salon = couturier_model.lister_tous_couturiers(salon_id=salon_id_user)
             
             options_couturiers = ["👥 Tous les couturiers"] + [
@@ -777,7 +776,7 @@ def afficher_page_fermer_commandes():
         # Récupérer les commandes terminées selon le rôle (Terminé ou Livré et payé)
         commandes_terminees = []
         try:
-            cursor = st.session_state.db_connection.get_connection().cursor()
+            cursor = st.session_state.db.get_connection().cursor()
             
             if is_admin_user and salon_id_user:
                 # Admin : voir toutes les commandes validées du salon (Livré et payé uniquement)
@@ -812,7 +811,7 @@ def afficher_page_fermer_commandes():
                 params = [couturier_id, salon_id_user]
             
             # Ajouter les filtres (adapter selon le SGBD)
-            db_type = st.session_state.db_connection.db_type
+            db_type = st.session_state.db.db_type
             if date_debut:
                 if db_type == 'mysql':
                     query += " AND DATE(c.date_creation) >= %s"
@@ -975,7 +974,7 @@ def afficher_page_fermer_commandes():
                         
                         if commande_complete:
                             from controllers.pdf_controller import PDFController
-                            pdf_controller = PDFController(st.session_state.db_connection)
+                            pdf_controller = PDFController(st.session_state.db)
                             
                             # S'assurer que le statut indique "Livré et payé" dans le PDF
                             # Le PDF affichera toujours "Livré et payé" pour indiquer que la commande est livrée et terminée
