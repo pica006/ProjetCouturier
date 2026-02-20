@@ -431,8 +431,14 @@ st.markdown("""
     setTimeout(forceButtonColors, 100);
     setTimeout(forceButtonColors, 500);
     
-    // Observer les changements DOM pour forcer les styles sur les nouveaux boutons
-    const observer = new MutationObserver(forceButtonColors);
+    // Debounce pour éviter les re-renders visuels excessifs (formulaire qui "clignote")
+    var debounceTimer;
+    function debouncedForceButtonColors() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(forceButtonColors, 150);
+    }
+    // Observer les changements DOM - debounced pour réduire le flicker
+    const observer = new MutationObserver(debouncedForceButtonColors);
     observer.observe(document.body, { childList: true, subtree: true });
     </script>
 """, unsafe_allow_html=True)
