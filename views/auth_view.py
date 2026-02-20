@@ -24,8 +24,8 @@ import mimetypes
 import os
 import streamlit as st
 from controllers.auth_controller import AuthController
-from models.database import DatabaseConnection
-from config import DATABASE_CONFIG, APP_CONFIG, BRANDING
+from database import get_db, is_db_available
+from config import APP_CONFIG, BRANDING
 from utils.bottom_nav import load_site_content
 
 
@@ -64,6 +64,24 @@ def _get_logo_data_uri():
         with open(logo_path, 'rb') as file:
             encoded = base64.b64encode(file.read()).decode('utf-8')
         return f"data:{mime_type};base64,{encoded}"
+    except Exception:
+        return None
+
+
+@st.cache_data(show_spinner=False)
+def _load_wallpaper_data_uri(wallpaper_path: str):
+    """Charge et encode l'image de fond en base64 (cache pour éviter 10s de chargement)."""
+    if not wallpaper_path:
+        return None
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    image_path = os.path.join(project_root, wallpaper_path)
+    if not os.path.exists(image_path):
+        return None
+    try:
+        with open(image_path, 'rb') as f:
+            img_b64 = base64.b64encode(f.read()).decode('utf-8')
+        mime = mimetypes.guess_type(image_path)[0] or 'image/png'
+        return f"data:{mime};base64,{img_b64}"
     except Exception:
         return None
 
@@ -362,219 +380,42 @@ def afficher_page_connexion():
     # FOND D'ÉCRAN PLEIN ÉCRAN (image en arrière-plan, formulaire par-dessus)
     # ========================================================================
     
+    # Fond d'écran : cache pour éviter 4-13 s de chargement à chaque requête
     wallpaper_path = APP_CONFIG.get('wallpaper_url')
-    if wallpaper_path:
-        project_root = os.path.dirname(os.path.dirname(__file__))
-        image_path = os.path.join(project_root, wallpaper_path)
-        if os.path.exists(image_path):
-            try:
-                with open(image_path, 'rb') as f:
-                    img_b64 = base64.b64encode(f.read()).decode('utf-8')
-                mime = mimetypes.guess_type(image_path)[0] or 'image/png'
-                data_uri = f"data:{mime};base64,{img_b64}"
-                st.markdown(f"""
-                    <style>
-                    .stApp {{
-                        background-image: url("{data_uri}") !important;
-                        background-size: cover !important;
-                        background-position: center !important;
-                        background-attachment: fixed !important;
-                        background-repeat: no-repeat !important;
-                        background-color: transparent !important;
-                        min-height: 100vh;
-                    }}
-                    .main .block-container {{
-                        background: transparent !important;
-                        padding-top: 2rem;
-                        max-width: 1200px;
-                    }}
-                    </style>
-                """, unsafe_allow_html=True)
-            except Exception as e:
-                st.warning(f"⚠️ Impossible de charger l'image de fond : {e}")
-        else:
-            st.warning(f"⚠️ Image de fond introuvable : {image_path}")
+    data_uri = _load_wallpaper_data_uri(wallpaper_path) if wallpaper_path else None
+    if data_uri:
+        st.markdown(f"""
+            <style>
+            .stApp {{
+                background-image: url("{data_uri}") !important;
+                background-size: cover !important;
+                background-position: center !important;
+                background-attachment: fixed !important;
+                background-repeat: no-repeat !important;
+                background-color: transparent !important;
+                min-height: 100vh;
+            }}
+            .main .block-container {{
+                background: transparent !important;
+                padding-top: 2rem;
+                max-width: 1200px;
+            }}
+            </style>
+        """, unsafe_allow_html=True)
+    
+    # DATABASE_URL obligatoire (aucune config locale)
+    if not is_db_available():
+        st.error(
+            "❌ **Variable DATABASE_URL non configurée.**\n\n"
+            "Sur Render : ajoutez la variable d'environnement DATABASE_URL "
+            "(Dashboard → Environment).\n\n"
+            "En local : créez un fichier `.env` avec :\n"
+            "`DATABASE_URL=postgresql://user:password@localhost:5432/db_couturier`"
+        )
+        st.stop()
     
     # ========================================================================
-    # DÉTECTION AUTOMATIQUE DE RENDER
-    # ========================================================================
-    
-    # Si on est sur Render, se connecter automatiquement à la base
-    from config import IS_RENDER
-    
-    if IS_RENDER and st.session_state.db_connection is None:
-        # Sur Render, on se connecte automatiquement avec les variables d'environnement
-        st.info("🌐 Détection de l'environnement Render - Connexion automatique...")
-        
-        try:
-            config = DATABASE_CONFIG.get('render_production', {})
-            
-            if not all([config.get('host'), config.get('database'), config.get('user'), config.get('password')]):
-                manquantes = [k for k, v in [
-                    ('DATABASE_HOST', config.get('host')),
-                    ('DATABASE_NAME', config.get('database')),
-                    ('DATABASE_USER', config.get('user')),
-                    ('DATABASE_PASSWORD', config.get('password'))
-                ] if not v]
-                st.error(
-                    "❌ **Configuration Render incomplète.**\n\n"
-                    "Render n'utilise **pas** le fichier `.env`. Les variables doivent être définies dans :\n"
-                    "**Dashboard Render → Votre service → Environment → Environment Variables**\n\n"
-                    f"**Variables manquantes :** {', '.join(manquantes)}\n\n"
-                    "Voir `DEPLOY_RENDER.md` section 3.3 pour les valeurs à renseigner."
-                )
-                st.stop()
-            
-            # Créer la connexion automatiquement
-            db_connection = DatabaseConnection('postgresql', config)
-            
-            if db_connection.connect():
-                # Sauvegarder la connexion
-                st.session_state.db_connection = db_connection
-                st.session_state.db_type = 'render_production'
-                
-                # Initialiser les tables
-                auth_controller = AuthController(db_connection)
-                auth_controller.initialiser_tables()
-                
-                from controllers.commande_controller import CommandeController
-                commande_controller = CommandeController(db_connection)
-                commande_controller.initialiser_tables()
-                
-                from models.database import ChargesModel
-                charges_model = ChargesModel(db_connection)
-                charges_model.creer_tables()
-                
-                st.success("✅ Connexion à la base Render réussie!")
-                st.rerun()
-            else:
-                st.error("❌ Échec de la connexion à la base Render. Vérifiez les variables d'environnement.")
-                st.stop()
-        except Exception as e:
-            st.error(f"❌ Erreur lors de la connexion automatique : {e}")
-            st.stop()
-    
-    # ========================================================================
-    # CONNEXION AUTOMATIQUE À LA BASE DE DONNÉES (LOCAL)
-    # ========================================================================
-    
-    # Si on est en local et pas encore connecté, se connecter automatiquement
-    if not IS_RENDER and st.session_state.db_connection is None:
-        st.info("🏠 Connexion automatique à PostgreSQL local...")
-        
-        try:
-            config = DATABASE_CONFIG.get('postgresql_local', {})
-            
-            if not all([config.get('host'), config.get('database'), config.get('user')]):
-                st.error("❌ Configuration PostgreSQL locale incomplète. Vérifiez config.py")
-                st.code(f"""
-Configuration actuelle:
-- Host: {config.get('host', 'NON DÉFINI')}
-- Port: {config.get('port', 'NON DÉFINI')}
-- Database: {config.get('database', 'NON DÉFINI')}
-- User: {config.get('user', 'NON DÉFINI')}
-- Password: {'***' if config.get('password') else '(VIDE)'}
-                """)
-                st.stop()
-            
-            # Créer la connexion automatiquement
-            db_connection = DatabaseConnection('postgresql', config)
-            
-            # Capturer l'erreur détaillée
-            import psycopg2
-            
-            try:
-                # Tenter la connexion avec gestion d'erreur détaillée
-                connection_result = db_connection.connect()
-                
-                if connection_result:
-                    # Sauvegarder la connexion
-                    st.session_state.db_connection = db_connection
-                    st.session_state.db_type = 'postgresql_local'
-                    
-                    # Initialiser les tables
-                    auth_controller = AuthController(db_connection)
-                    auth_controller.initialiser_tables()
-                    
-                    from controllers.commande_controller import CommandeController
-                    commande_controller = CommandeController(db_connection)
-                    commande_controller.initialiser_tables()
-                    
-                    from models.database import ChargesModel
-                    charges_model = ChargesModel(db_connection)
-                    charges_model.creer_tables()
-                    
-                    st.success("✅ Connexion à PostgreSQL local réussie!")
-                    st.rerun()
-                else:
-                    # Si connect() retourne False, essayer de capturer l'erreur directement
-                    try:
-                        test_conn = psycopg2.connect(
-                            host=config.get('host'),
-                            port=config.get('port'),
-                            database=config.get('database'),
-                            user=config.get('user'),
-                            password=config.get('password', '')
-                        )
-                        test_conn.close()
-                    except psycopg2.OperationalError as pg_error:
-                        error_msg = str(pg_error)
-                        st.error("❌ Échec de la connexion à PostgreSQL local")
-                        st.error(f"**Erreur détaillée :** {error_msg}")
-                        
-                        # Diagnostic selon le type d'erreur
-                        if "does not exist" in error_msg or "n'existe pas" in error_msg:
-                            st.warning("🔍 **Diagnostic :** La base de données n'existe pas")
-                            st.info("💡 **Solution :** Exécutez `python creer_base_postgresql.py` pour créer la base")
-                        elif "password authentication failed" in error_msg.lower() or "mot de passe" in error_msg.lower():
-                            st.warning("🔍 **Diagnostic :** Mot de passe incorrect")
-                            st.info("💡 **Solution :** Vérifiez le mot de passe dans `config.py` (ligne 84)")
-                        elif "could not connect" in error_msg.lower() or "refused" in error_msg.lower():
-                            st.warning("🔍 **Diagnostic :** PostgreSQL n'est pas démarré ou n'est pas accessible")
-                            if config.get('port') == 3306 or config.get('port') == '3306':
-                                st.error("⚠️ **Vous utilisez le port 3306 (MySQL).** Pour PostgreSQL, utilisez le port **5432** dans votre fichier `.env` : `DB_PORT=5432`")
-                            st.info("💡 **Solutions :**")
-                            st.info("   1. Vérifiez que PostgreSQL est démarré (Services Windows → PostgreSQL)")
-                            st.info("   2. Dans `.env` : **DB_PORT=5432** (pas 3306), **DB_NAME=db_couturier**, **DB_USER=postgres**, **DB_PASSWORD=votre_mot_de_passe**")
-                            st.info("   3. Vérifiez que le host 'localhost' est correct")
-                        else:
-                            st.info("💡 **Solutions possibles :**")
-                            st.info("   1. Vérifiez que PostgreSQL est démarré")
-                            st.info("   2. Vérifiez la configuration dans `config.py`")
-                            st.info("   3. Exécutez `python test_connexion_postgresql.py` pour un diagnostic complet")
-                        
-                        port_ok = config.get('port') not in (3306, '3306')
-                        st.code(f"""
-Configuration utilisée (lue depuis .env ou config.py):
-- Host: {config.get('host')}
-- Port: {config.get('port')}{'  ← Utilisez 5432 pour PostgreSQL (3306 = MySQL)' if not port_ok else ''}
-- Database: {config.get('database')}
-- User: {config.get('user')}
-- Password: {'***' if config.get('password') else '(VIDE - peut être le problème!)'}
-
-Pour PostgreSQL local, dans votre fichier .env à la racine du projet, mettez:
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=db_couturier
-DB_USER=postgres
-DB_PASSWORD=votre_mot_de_passe_postgresql
-                        """)
-                        st.stop()
-                    except Exception as test_error:
-                        st.error(f"❌ Erreur lors du test de connexion : {test_error}")
-                        st.stop()
-            except Exception as conn_error:
-                st.error(f"❌ Erreur lors de la connexion : {conn_error}")
-                st.info("💡 Exécutez `python test_connexion_postgresql.py` pour un diagnostic complet")
-                st.stop()
-        except Exception as e:
-            st.error(f"❌ Erreur lors de la connexion : {e}")
-            import traceback
-            st.code(traceback.format_exc())
-            st.stop()
-    
-    # ========================================================================
-    # AUTHENTIFICATION DU COUTURIER
+    # AUTHENTIFICATION DU COUTURIER (déclenchée uniquement par soumission du formulaire)
     # ========================================================================
     
     # Si on arrive ici, c'est qu'on est déjà connecté à la base de données
@@ -629,59 +470,37 @@ DB_PASSWORD=votre_mot_de_passe_postgresql
             # ================================================================
             
             if submit_auth:
-                # Vérifier que le code n'est pas vide
                 if not code_couturier:
                     st.error("⚠️ Veuillez entrer votre code utilisateur")
                 elif not password_input:
                     st.error("⚠️ Veuillez entrer votre mot de passe")
                 else:
-                    # Afficher un spinner pendant la vérification
                     with st.spinner("Vérification des identifiants..."):
-                        
-                        # Créer un contrôleur d'authentification
-                        # POURQUOI ? Pour gérer la logique d'authentification
-                        auth_controller = AuthController(st.session_state.db_connection)
-                        
-                        # Appeler la méthode authentifier() avec CODE + MOT DE PASSE
-                        # RETOURNE : (succès, données, message)
-                        # - succès : True si code + password corrects, False sinon
-                        # - données : Informations du couturier (nom, prénom, etc.)
-                        # - message : Message à afficher à l'utilisateur
-                        succes, donnees, message = auth_controller.authentifier(code_couturier, password_input)
-                        
-                        # Si l'authentification a réussi
-                        if succes:
-                            # Sauvegarder l'état d'authentification dans la session
-                            st.session_state.authentifie = True
-                            
-                            # Sauvegarder les données du couturier
-                            st.session_state.couturier_data = donnees
-                            
-                            # Rediriger selon le rôle de l'utilisateur
-                            # Si c'est un super administrateur, rediriger vers le dashboard super admin
-                            role_utilisateur = donnees.get('role', '')
-                            # Normaliser le rôle (gérer les variations : SUPER_ADMIN, super_admin, etc.)
-                            role_normalise = str(role_utilisateur).upper().strip()
-                            
-                            # Debug : afficher le rôle détecté (temporaire)
-                            if role_normalise == 'SUPER_ADMIN':
-                                st.info(f"🔧 Rôle détecté : {role_utilisateur} → Redirection vers Dashboard Super Admin")
-                                st.session_state.page = 'super_admin_dashboard'
+                        try:
+                            db = get_db()
+                            if not db or not db.is_connected():
+                                st.error("❌ Impossible de se connecter à la base de données. Vérifiez DATABASE_URL.")
                             else:
-                                # Pour les autres rôles, rediriger vers la page de nouvelle commande
-                                st.session_state.page = 'nouvelle_commande'
-                            
-                            # Afficher un message de succès
-                            st.success(f"✅ {message}")
-                            
-                            # Afficher des ballons pour célébrer !
-                            st.balloons()
-                            
-                            # Recharger la page pour afficher l'interface principale
-                            st.rerun()
-                        else:
-                            # Si l'authentification a échoué, afficher l'erreur
-                            st.error(f"❌ {message}")
+                                from controllers.commande_controller import CommandeController
+                                from models.database import ChargesModel
+                                auth_controller = AuthController(db)
+                                auth_controller.initialiser_tables()
+                                CommandeController(db).initialiser_tables()
+                                ChargesModel(db).creer_tables()
+                                succes, donnees, message = auth_controller.authentifier(code_couturier, password_input)
+                                if succes:
+                                    st.session_state.db_connection = db
+                                    st.session_state.authentifie = True
+                                    st.session_state.couturier_data = donnees
+                                    role_normalise = str(donnees.get("role", "")).upper().strip()
+                                    st.session_state.page = "super_admin_dashboard" if role_normalise == "SUPER_ADMIN" else "nouvelle_commande"
+                                    st.success(f"✅ {message}")
+                                    st.balloons()
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {message}")
+                        except Exception as e:
+                            st.error(f"❌ Erreur : {e}")
         
         support_text = content.get("support_text", "")
         if support_text:

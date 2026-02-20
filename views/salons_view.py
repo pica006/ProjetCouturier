@@ -20,9 +20,8 @@ def afficher_page_salons():
     from utils.page_header import afficher_header_page
     afficher_header_page("🏢 Gestion des Salons de Couture", "Créez et gérez vos salons de couture")
     
-    # Récupérer la connexion
-    if 'db_connection' not in st.session_state:
-        st.error("❌ Erreur : Connexion à la base de données non établie")
+    if not st.session_state.get("db_connection"):
+        st.error("❌ Connexion à la base de données non établie")
         return
     
     salon_model = SalonModel(st.session_state.db_connection)

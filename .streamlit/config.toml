@@ -4,9 +4,13 @@ enableStaticServing = false
 # headless = true pour éviter les avertissements en production
 enableXsrfProtection = true
 enableCORS = false
+# Réduire les timeouts pour éviter les reconnexions longues (Render sleep)
+maxUploadSize = 200
 
 [browser]
 gatherUsageStats = false
 
 [client]
 showErrorDetails = true
+# Mode viewer en production (menu simplifié, moins de re-renders)
+toolbarMode = "viewer"
