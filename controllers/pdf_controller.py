@@ -164,9 +164,9 @@ class PDFController:
             if not salon_id and self.db_connection:
                 try:
                     import streamlit as st
-                    if hasattr(st, 'session_state') and st.session_state.get('couturier_data'):
+                    if hasattr(st, 'session_state') and st.session_state.get('user'):
                         from utils.role_utils import obtenir_salon_id
-                        salon_id = obtenir_salon_id(st.session_state.couturier_data)
+                        salon_id = obtenir_salon_id(st.session_state.user)
                         if salon_id:
                             print(f"✅ Salon ID récupéré depuis session: {salon_id}")
                 except Exception as e:
@@ -782,9 +782,9 @@ class PDFController:
             if not salon_id and self.db_connection:
                 try:
                     import streamlit as st
-                    if hasattr(st, 'session_state') and st.session_state.get('couturier_data'):
+                    if hasattr(st, 'session_state') and st.session_state.get('user'):
                         from utils.role_utils import obtenir_salon_id
-                        salon_id = obtenir_salon_id(st.session_state.couturier_data)
+                        salon_id = obtenir_salon_id(st.session_state.user)
                         if salon_id:
                             print(f"✅ Salon ID récupéré depuis session pour PDF livraison: {salon_id}")
                 except Exception as e:
