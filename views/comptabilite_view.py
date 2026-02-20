@@ -36,17 +36,17 @@ def afficher_page_comptabilite():
     afficher_header_page("💰 Comptabilité & Statistiques", "Analyse financière et suivi des revenus")
     
     # Vérifier la connexion
-    if not st.session_state.db_connection or not st.session_state.authentifie:
+    if not st.session_state.db or not st.session_state.authenticated:
         st.error("❌ Vous devez être connecté pour accéder à cette page")
         return
     
     # Récupérer l'ID du couturier
-    couturier_id = st.session_state.couturier_data['id']
+    couturier_id = st.session_state.user['id']
     
     # Contrôleur (créé une seule fois)
     try:
         from controllers.comptabilite_controller import ComptabiliteController
-        compta_controller = ComptabiliteController(st.session_state.db_connection)
+        compta_controller = ComptabiliteController(st.session_state.db)
     except Exception as e:
         st.error(f"❌ Impossible d'initialiser la comptabilité : {e}")
         return
@@ -401,11 +401,11 @@ def afficher_page_comptabilite():
         
         st.markdown("### 🔔 Commandes à relancer")
         # Configurer l'email pour le salon courant
-        db = st.session_state.db_connection
+        db = st.session_state.db
         smtp_config = None
         try:
-            if st.session_state.get("couturier_data"):
-                salon_id = obtenir_salon_id(st.session_state.couturier_data)
+            if st.session_state.get("user"):
+                salon_id = obtenir_salon_id(st.session_state.user)
                 if salon_id:
                     salon_model = SalonModel(db)
                     smtp_config = salon_model.obtenir_config_email_salon(salon_id)
