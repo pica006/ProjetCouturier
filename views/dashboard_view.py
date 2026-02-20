@@ -34,19 +34,19 @@ def afficher_page_dashboard():
     afficher_header_page("📊 Tableau de bord", "Vue d'ensemble de votre activité")
     
     # Vérifier la connexion
-    if not st.session_state.db_connection or not st.session_state.authentifie:
+    if not st.session_state.db or not st.session_state.authenticated:
         st.error("❌ Vous devez être connecté pour accéder à cette page")
         return
     
-    couturier_data = st.session_state.couturier_data
+    couturier_data = st.session_state.user
     couturier_id = couturier_data['id']
     salon_id = obtenir_salon_id(couturier_data)
     
     try:
         from controllers.comptabilite_controller import ComptabiliteController
         
-        compta_controller = ComptabiliteController(st.session_state.db_connection)
-        charges_model = ChargesModel(st.session_state.db_connection)
+        compta_controller = ComptabiliteController(st.session_state.db)
+        charges_model = ChargesModel(st.session_state.db)
         
         # ========================================================================
         # SÉLECTION DE LA PÉRIODE
@@ -110,7 +110,7 @@ def afficher_page_dashboard():
         # Filtrer par couturier (admin uniquement)
         couturier_id_filtre_modeles = couturier_id
         if est_admin(couturier_data) and salon_id:
-            couturier_model = CouturierModel(st.session_state.db_connection)
+            couturier_model = CouturierModel(st.session_state.db)
             tous_couturiers = couturier_model.lister_tous_couturiers(salon_id=salon_id)
             options = ["👥 Tous les couturiers"] + [
                 f"{c['code_couturier']} - {c['prenom']} {c['nom']}" for c in (tous_couturiers or [])
@@ -333,7 +333,7 @@ def afficher_page_dashboard():
             date_debut_dt = datetime.combine(date_debut, datetime.min.time())
             date_fin_dt = datetime.combine(date_fin, datetime.max.time())
             
-            commande_model = CommandeModel(st.session_state.db_connection)
+            commande_model = CommandeModel(st.session_state.db)
             modeles = commande_model.lister_modeles_realises(
                 couturier_id=couturier_id_filtre_modeles,
                 tous_les_couturiers=(couturier_id_filtre_modeles is None),
