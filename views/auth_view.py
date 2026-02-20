@@ -399,98 +399,50 @@ def afficher_page_connexion():
     # DÉTECTION AUTOMATIQUE DE RENDER
     # ========================================================================
     
-    # Si on est sur Render, se connecter automatiquement à la base
     from config import IS_RENDER
     
+    # Vérifier si la connexion DB existe mais est morte (timeout PostgreSQL sur Render)
+    # → Réinitialiser pour forcer une reconnexion propre
+    db_conn = st.session_state.get('db_connection')
+    if db_conn is not None and hasattr(db_conn, 'is_connected') and not db_conn.is_connected():
+        try:
+            db_conn.disconnect()
+        except Exception:
+            pass
+        st.session_state.db_connection = None
+        st.session_state.db_type = None
+    
+    # Si on est sur Render et pas encore connecté, se connecter automatiquement
     if IS_RENDER and st.session_state.db_connection is None:
-        # Sur Render, on se connecte automatiquement avec les variables d'environnement
-        st.info("🌐 Détection de l'environnement Render - Connexion automatique...")
-        
-        try:
-            config = DATABASE_CONFIG.get('render_production', {})
-            
-            if not all([config.get('host'), config.get('database'), config.get('user'), config.get('password')]):
-                manquantes = [k for k, v in [
-                    ('DATABASE_HOST', config.get('host')),
-                    ('DATABASE_NAME', config.get('database')),
-                    ('DATABASE_USER', config.get('user')),
-                    ('DATABASE_PASSWORD', config.get('password'))
-                ] if not v]
-                st.error(
-                    "❌ **Configuration Render incomplète.**\n\n"
-                    "Render n'utilise **pas** le fichier `.env`. Les variables doivent être définies dans :\n"
-                    "**Dashboard Render → Votre service → Environment → Environment Variables**\n\n"
-                    f"**Variables manquantes :** {', '.join(manquantes)}\n\n"
-                    "Voir `DEPLOY_RENDER.md` section 3.3 pour les valeurs à renseigner."
-                )
-                st.stop()
-            
-            # Créer la connexion automatiquement
-            db_connection = DatabaseConnection('postgresql', config)
-            
-            if db_connection.connect():
-                # Sauvegarder la connexion
-                st.session_state.db_connection = db_connection
-                st.session_state.db_type = 'render_production'
-                
-                # Initialiser les tables
-                auth_controller = AuthController(db_connection)
-                auth_controller.initialiser_tables()
-                
-                from controllers.commande_controller import CommandeController
-                commande_controller = CommandeController(db_connection)
-                commande_controller.initialiser_tables()
-                
-                from models.database import ChargesModel
-                charges_model = ChargesModel(db_connection)
-                charges_model.creer_tables()
-                
-                st.success("✅ Connexion à la base Render réussie!")
-                st.rerun()
-            else:
-                st.error("❌ Échec de la connexion à la base Render. Vérifiez les variables d'environnement.")
-                st.stop()
-        except Exception as e:
-            st.error(f"❌ Erreur lors de la connexion automatique : {e}")
-            st.stop()
-    
-    # ========================================================================
-    # CONNEXION AUTOMATIQUE À LA BASE DE DONNÉES (LOCAL)
-    # ========================================================================
-    
-    # Si on est en local et pas encore connecté, se connecter automatiquement
-    if not IS_RENDER and st.session_state.db_connection is None:
-        st.info("🏠 Connexion automatique à PostgreSQL local...")
-        
-        try:
-            config = DATABASE_CONFIG.get('postgresql_local', {})
-            
-            if not all([config.get('host'), config.get('database'), config.get('user')]):
-                st.error("❌ Configuration PostgreSQL locale incomplète. Vérifiez config.py")
-                st.code(f"""
-Configuration actuelle:
-- Host: {config.get('host', 'NON DÉFINI')}
-- Port: {config.get('port', 'NON DÉFINI')}
-- Database: {config.get('database', 'NON DÉFINI')}
-- User: {config.get('user', 'NON DÉFINI')}
-- Password: {'***' if config.get('password') else '(VIDE)'}
-                """)
-                st.stop()
-            
-            # Créer la connexion automatiquement
-            db_connection = DatabaseConnection('postgresql', config)
-            
-            # Capturer l'erreur détaillée
-            import psycopg2
-            
+        # Sur Render gratuit : l'app peut être en veille (30-60 s de réveil)
+        # On affiche un spinner unique pour éviter le clignotement
+        with st.spinner("🌐 Connexion à la base de données..."):
             try:
-                # Tenter la connexion avec gestion d'erreur détaillée
-                connection_result = db_connection.connect()
+                config = DATABASE_CONFIG.get('render_production', {})
                 
-                if connection_result:
+                if not all([config.get('host'), config.get('database'), config.get('user'), config.get('password')]):
+                    manquantes = [k for k, v in [
+                        ('DATABASE_HOST', config.get('host')),
+                        ('DATABASE_NAME', config.get('database')),
+                        ('DATABASE_USER', config.get('user')),
+                        ('DATABASE_PASSWORD', config.get('password'))
+                    ] if not v]
+                    st.error(
+                        "❌ **Configuration Render incomplète.**\n\n"
+                        "Render n'utilise **pas** le fichier `.env`. Les variables doivent être définies dans :\n"
+                        "**Dashboard Render → Votre service → Environment → Environment Variables**\n\n"
+                        f"**Variables manquantes :** {', '.join(manquantes)}\n\n"
+                        "Voir `DEPLOY_RENDER.md` section 3.3 pour les valeurs à renseigner."
+                    )
+                    st.stop()
+                
+                # Créer la connexion automatiquement
+                db_connection = DatabaseConnection('postgresql', config)
+                
+                if db_connection.connect():
                     # Sauvegarder la connexion
                     st.session_state.db_connection = db_connection
-                    st.session_state.db_type = 'postgresql_local'
+                    st.session_state.db_type = 'render_production'
                     
                     # Initialiser les tables
                     auth_controller = AuthController(db_connection)
@@ -504,47 +456,103 @@ Configuration actuelle:
                     charges_model = ChargesModel(db_connection)
                     charges_model.creer_tables()
                     
-                    st.success("✅ Connexion à PostgreSQL local réussie!")
                     st.rerun()
                 else:
-                    # Si connect() retourne False, essayer de capturer l'erreur directement
-                    try:
-                        test_conn = psycopg2.connect(
-                            host=config.get('host'),
-                            port=config.get('port'),
-                            database=config.get('database'),
-                            user=config.get('user'),
-                            password=config.get('password', '')
-                        )
-                        test_conn.close()
-                    except psycopg2.OperationalError as pg_error:
-                        error_msg = str(pg_error)
-                        st.error("❌ Échec de la connexion à PostgreSQL local")
-                        st.error(f"**Erreur détaillée :** {error_msg}")
+                    st.error("❌ Échec de la connexion à la base Render. Vérifiez les variables d'environnement.")
+                    st.stop()
+            except Exception as e:
+                st.error(f"❌ Erreur lors de la connexion automatique : {e}")
+                st.stop()
+    
+    # ========================================================================
+    # CONNEXION AUTOMATIQUE À LA BASE DE DONNÉES (LOCAL)
+    # ========================================================================
+    
+    # Si on est en local et pas encore connecté, se connecter automatiquement
+    if not IS_RENDER and st.session_state.db_connection is None:
+        with st.spinner("🏠 Connexion à PostgreSQL local..."):
+            try:
+                config = DATABASE_CONFIG.get('postgresql_local', {})
+                
+                if not all([config.get('host'), config.get('database'), config.get('user')]):
+                    st.error("❌ Configuration PostgreSQL locale incomplète. Vérifiez config.py")
+                    st.code(f"""
+Configuration actuelle:
+- Host: {config.get('host', 'NON DÉFINI')}
+- Port: {config.get('port', 'NON DÉFINI')}
+- Database: {config.get('database', 'NON DÉFINI')}
+- User: {config.get('user', 'NON DÉFINI')}
+- Password: {'***' if config.get('password') else '(VIDE)'}
+                    """)
+                    st.stop()
+                
+                # Créer la connexion automatiquement
+                db_connection = DatabaseConnection('postgresql', config)
+                
+                # Capturer l'erreur détaillée
+                import psycopg2
+                
+                try:
+                    # Tenter la connexion avec gestion d'erreur détaillée
+                    connection_result = db_connection.connect()
+                    
+                    if connection_result:
+                        # Sauvegarder la connexion
+                        st.session_state.db_connection = db_connection
+                        st.session_state.db_type = 'postgresql_local'
                         
-                        # Diagnostic selon le type d'erreur
-                        if "does not exist" in error_msg or "n'existe pas" in error_msg:
-                            st.warning("🔍 **Diagnostic :** La base de données n'existe pas")
-                            st.info("💡 **Solution :** Exécutez `python creer_base_postgresql.py` pour créer la base")
-                        elif "password authentication failed" in error_msg.lower() or "mot de passe" in error_msg.lower():
-                            st.warning("🔍 **Diagnostic :** Mot de passe incorrect")
-                            st.info("💡 **Solution :** Vérifiez le mot de passe dans `config.py` (ligne 84)")
-                        elif "could not connect" in error_msg.lower() or "refused" in error_msg.lower():
-                            st.warning("🔍 **Diagnostic :** PostgreSQL n'est pas démarré ou n'est pas accessible")
-                            if config.get('port') == 3306 or config.get('port') == '3306':
-                                st.error("⚠️ **Vous utilisez le port 3306 (MySQL).** Pour PostgreSQL, utilisez le port **5432** dans votre fichier `.env` : `DB_PORT=5432`")
-                            st.info("💡 **Solutions :**")
-                            st.info("   1. Vérifiez que PostgreSQL est démarré (Services Windows → PostgreSQL)")
-                            st.info("   2. Dans `.env` : **DB_PORT=5432** (pas 3306), **DB_NAME=db_couturier**, **DB_USER=postgres**, **DB_PASSWORD=votre_mot_de_passe**")
-                            st.info("   3. Vérifiez que le host 'localhost' est correct")
-                        else:
-                            st.info("💡 **Solutions possibles :**")
-                            st.info("   1. Vérifiez que PostgreSQL est démarré")
-                            st.info("   2. Vérifiez la configuration dans `config.py`")
-                            st.info("   3. Exécutez `python test_connexion_postgresql.py` pour un diagnostic complet")
+                        # Initialiser les tables
+                        auth_controller = AuthController(db_connection)
+                        auth_controller.initialiser_tables()
                         
-                        port_ok = config.get('port') not in (3306, '3306')
-                        st.code(f"""
+                        from controllers.commande_controller import CommandeController
+                        commande_controller = CommandeController(db_connection)
+                        commande_controller.initialiser_tables()
+                        
+                        from models.database import ChargesModel
+                        charges_model = ChargesModel(db_connection)
+                        charges_model.creer_tables()
+                        
+                        st.rerun()
+                    else:
+                        # Si connect() retourne False, essayer de capturer l'erreur directement
+                        try:
+                            test_conn = psycopg2.connect(
+                                host=config.get('host'),
+                                port=config.get('port'),
+                                database=config.get('database'),
+                                user=config.get('user'),
+                                password=config.get('password', '')
+                            )
+                            test_conn.close()
+                        except psycopg2.OperationalError as pg_error:
+                            error_msg = str(pg_error)
+                            st.error("❌ Échec de la connexion à PostgreSQL local")
+                            st.error(f"**Erreur détaillée :** {error_msg}")
+                            
+                            # Diagnostic selon le type d'erreur
+                            if "does not exist" in error_msg or "n'existe pas" in error_msg:
+                                st.warning("🔍 **Diagnostic :** La base de données n'existe pas")
+                                st.info("💡 **Solution :** Exécutez `python creer_base_postgresql.py` pour créer la base")
+                            elif "password authentication failed" in error_msg.lower() or "mot de passe" in error_msg.lower():
+                                st.warning("🔍 **Diagnostic :** Mot de passe incorrect")
+                                st.info("💡 **Solution :** Vérifiez le mot de passe dans `config.py` (ligne 84)")
+                            elif "could not connect" in error_msg.lower() or "refused" in error_msg.lower():
+                                st.warning("🔍 **Diagnostic :** PostgreSQL n'est pas démarré ou n'est pas accessible")
+                                if config.get('port') == 3306 or config.get('port') == '3306':
+                                    st.error("⚠️ **Vous utilisez le port 3306 (MySQL).** Pour PostgreSQL, utilisez le port **5432** dans votre fichier `.env` : `DB_PORT=5432`")
+                                st.info("💡 **Solutions :**")
+                                st.info("   1. Vérifiez que PostgreSQL est démarré (Services Windows → PostgreSQL)")
+                                st.info("   2. Dans `.env` : **DB_PORT=5432** (pas 3306), **DB_NAME=db_couturier**, **DB_USER=postgres**, **DB_PASSWORD=votre_mot_de_passe**")
+                                st.info("   3. Vérifiez que le host 'localhost' est correct")
+                            else:
+                                st.info("💡 **Solutions possibles :**")
+                                st.info("   1. Vérifiez que PostgreSQL est démarré")
+                                st.info("   2. Vérifiez la configuration dans `config.py`")
+                                st.info("   3. Exécutez `python test_connexion_postgresql.py` pour un diagnostic complet")
+                            
+                            port_ok = config.get('port') not in (3306, '3306')
+                            st.code(f"""
 Configuration utilisée (lue depuis .env ou config.py):
 - Host: {config.get('host')}
 - Port: {config.get('port')}{'  ← Utilisez 5432 pour PostgreSQL (3306 = MySQL)' if not port_ok else ''}
@@ -558,20 +566,20 @@ DB_PORT=5432
 DB_NAME=db_couturier
 DB_USER=postgres
 DB_PASSWORD=votre_mot_de_passe_postgresql
-                        """)
-                        st.stop()
-                    except Exception as test_error:
-                        st.error(f"❌ Erreur lors du test de connexion : {test_error}")
-                        st.stop()
-            except Exception as conn_error:
-                st.error(f"❌ Erreur lors de la connexion : {conn_error}")
-                st.info("💡 Exécutez `python test_connexion_postgresql.py` pour un diagnostic complet")
+                            """)
+                            st.stop()
+                        except Exception as test_error:
+                            st.error(f"❌ Erreur lors du test de connexion : {test_error}")
+                            st.stop()
+                except Exception as conn_error:
+                    st.error(f"❌ Erreur lors de la connexion : {conn_error}")
+                    st.info("💡 Exécutez `python test_connexion_postgresql.py` pour un diagnostic complet")
+                    st.stop()
+            except Exception as e:
+                st.error(f"❌ Erreur lors de la connexion : {e}")
+                import traceback
+                st.code(traceback.format_exc())
                 st.stop()
-        except Exception as e:
-            st.error(f"❌ Erreur lors de la connexion : {e}")
-            import traceback
-            st.code(traceback.format_exc())
-            st.stop()
     
     # ========================================================================
     # AUTHENTIFICATION DU COUTURIER
@@ -583,6 +591,12 @@ DB_PASSWORD=votre_mot_de_passe_postgresql
     # ====================================================================
     # FORMULAIRE D'AUTHENTIFICATION AVEC CODE COUTURIER
     # ====================================================================
+    
+    # Mode debug : afficher le nombre de reruns (variable DEBUG_AUTH=1 dans Render)
+    if os.getenv('DEBUG_AUTH') == '1':
+        run_count = st.session_state.get('_auth_run_count', 0) + 1
+        st.session_state['_auth_run_count'] = run_count
+        st.caption(f"🔧 Debug : exécution #{run_count}")
     
     # POURQUOI ? Pour vérifier l'identité du couturier
     # COMMENT ? L'user entre son code + password, on vérifie dans la base de données
