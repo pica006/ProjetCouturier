@@ -68,6 +68,24 @@ def _get_logo_data_uri():
         return None
 
 
+@st.cache_data(show_spinner=False)
+def _load_wallpaper_data_uri(wallpaper_path: str):
+    """Charge et encode l'image de fond en base64 (cache pour éviter 10s de chargement)."""
+    if not wallpaper_path:
+        return None
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    image_path = os.path.join(project_root, wallpaper_path)
+    if not os.path.exists(image_path):
+        return None
+    try:
+        with open(image_path, 'rb') as f:
+            img_b64 = base64.b64encode(f.read()).decode('utf-8')
+        mime = mimetypes.guess_type(image_path)[0] or 'image/png'
+        return f"data:{mime};base64,{img_b64}"
+    except Exception:
+        return None
+
+
 def _get_lux_vars_style():
     return f"""
     <style>
@@ -362,38 +380,28 @@ def afficher_page_connexion():
     # FOND D'ÉCRAN PLEIN ÉCRAN (image en arrière-plan, formulaire par-dessus)
     # ========================================================================
     
+    # Fond d'écran : cache pour éviter 4-13 s de chargement à chaque requête
     wallpaper_path = APP_CONFIG.get('wallpaper_url')
-    if wallpaper_path:
-        project_root = os.path.dirname(os.path.dirname(__file__))
-        image_path = os.path.join(project_root, wallpaper_path)
-        if os.path.exists(image_path):
-            try:
-                with open(image_path, 'rb') as f:
-                    img_b64 = base64.b64encode(f.read()).decode('utf-8')
-                mime = mimetypes.guess_type(image_path)[0] or 'image/png'
-                data_uri = f"data:{mime};base64,{img_b64}"
-                st.markdown(f"""
-                    <style>
-                    .stApp {{
-                        background-image: url("{data_uri}") !important;
-                        background-size: cover !important;
-                        background-position: center !important;
-                        background-attachment: fixed !important;
-                        background-repeat: no-repeat !important;
-                        background-color: transparent !important;
-                        min-height: 100vh;
-                    }}
-                    .main .block-container {{
-                        background: transparent !important;
-                        padding-top: 2rem;
-                        max-width: 1200px;
-                    }}
-                    </style>
-                """, unsafe_allow_html=True)
-            except Exception as e:
-                st.warning(f"⚠️ Impossible de charger l'image de fond : {e}")
-        else:
-            st.warning(f"⚠️ Image de fond introuvable : {image_path}")
+    data_uri = _load_wallpaper_data_uri(wallpaper_path) if wallpaper_path else None
+    if data_uri:
+        st.markdown(f"""
+            <style>
+            .stApp {{
+                background-image: url("{data_uri}") !important;
+                background-size: cover !important;
+                background-position: center !important;
+                background-attachment: fixed !important;
+                background-repeat: no-repeat !important;
+                background-color: transparent !important;
+                min-height: 100vh;
+            }}
+            .main .block-container {{
+                background: transparent !important;
+                padding-top: 2rem;
+                max-width: 1200px;
+            }}
+            </style>
+        """, unsafe_allow_html=True)
     
     # ========================================================================
     # DÉTECTION AUTOMATIQUE DE RENDER
@@ -401,68 +409,53 @@ def afficher_page_connexion():
     
     from config import IS_RENDER
     
-    # Vérifier si la connexion DB existe mais est morte (timeout PostgreSQL sur Render)
-    # → Réinitialiser pour forcer une reconnexion propre
-    db_conn = st.session_state.get('db_connection')
-    if db_conn is not None and hasattr(db_conn, 'is_connected') and not db_conn.is_connected():
-        try:
-            db_conn.disconnect()
-        except Exception:
-            pass
-        st.session_state.db_connection = None
-        st.session_state.db_type = None
-    
-    # Si on est sur Render et pas encore connecté, se connecter automatiquement
+    # Si on est sur Render, se connecter automatiquement à la base
     if IS_RENDER and st.session_state.db_connection is None:
-        # Sur Render gratuit : l'app peut être en veille (30-60 s de réveil)
-        # On affiche un spinner unique pour éviter le clignotement
-        with st.spinner("🌐 Connexion à la base de données..."):
-            try:
-                config = DATABASE_CONFIG.get('render_production', {})
-                
-                if not all([config.get('host'), config.get('database'), config.get('user'), config.get('password')]):
-                    manquantes = [k for k, v in [
-                        ('DATABASE_HOST', config.get('host')),
-                        ('DATABASE_NAME', config.get('database')),
-                        ('DATABASE_USER', config.get('user')),
-                        ('DATABASE_PASSWORD', config.get('password'))
-                    ] if not v]
-                    st.error(
-                        "❌ **Configuration Render incomplète.**\n\n"
-                        "Render n'utilise **pas** le fichier `.env`. Les variables doivent être définies dans :\n"
-                        "**Dashboard Render → Votre service → Environment → Environment Variables**\n\n"
-                        f"**Variables manquantes :** {', '.join(manquantes)}\n\n"
-                        "Voir `DEPLOY_RENDER.md` section 3.3 pour les valeurs à renseigner."
-                    )
-                    st.stop()
-                
-                # Créer la connexion automatiquement
-                db_connection = DatabaseConnection('postgresql', config)
-                
-                if db_connection.connect():
-                    # Sauvegarder la connexion
-                    st.session_state.db_connection = db_connection
-                    st.session_state.db_type = 'render_production'
-                    
-                    # Initialiser les tables
-                    auth_controller = AuthController(db_connection)
-                    auth_controller.initialiser_tables()
-                    
-                    from controllers.commande_controller import CommandeController
-                    commande_controller = CommandeController(db_connection)
-                    commande_controller.initialiser_tables()
-                    
-                    from models.database import ChargesModel
-                    charges_model = ChargesModel(db_connection)
-                    charges_model.creer_tables()
-                    
-                    st.rerun()
-                else:
-                    st.error("❌ Échec de la connexion à la base Render. Vérifiez les variables d'environnement.")
-                    st.stop()
-            except Exception as e:
-                st.error(f"❌ Erreur lors de la connexion automatique : {e}")
+        st.info("🌐 Détection de l'environnement Render - Connexion automatique...")
+        try:
+            config = DATABASE_CONFIG.get('render_production', {})
+            
+            if not all([config.get('host'), config.get('database'), config.get('user'), config.get('password')]):
+                manquantes = [k for k, v in [
+                    ('DATABASE_HOST', config.get('host')),
+                    ('DATABASE_NAME', config.get('database')),
+                    ('DATABASE_USER', config.get('user')),
+                    ('DATABASE_PASSWORD', config.get('password'))
+                ] if not v]
+                st.error(
+                    "❌ **Configuration Render incomplète.**\n\n"
+                    "Render n'utilise **pas** le fichier `.env`. Les variables doivent être définies dans :\n"
+                    "**Dashboard Render → Votre service → Environment → Environment Variables**\n\n"
+                    f"**Variables manquantes :** {', '.join(manquantes)}\n\n"
+                    "Voir `DEPLOY_RENDER.md` section 3.3 pour les valeurs à renseigner."
+                )
                 st.stop()
+            
+            db_connection = DatabaseConnection('postgresql', config)
+            
+            if db_connection.connect():
+                st.session_state.db_connection = db_connection
+                st.session_state.db_type = 'render_production'
+                
+                auth_controller = AuthController(db_connection)
+                auth_controller.initialiser_tables()
+                
+                from controllers.commande_controller import CommandeController
+                commande_controller = CommandeController(db_connection)
+                commande_controller.initialiser_tables()
+                
+                from models.database import ChargesModel
+                charges_model = ChargesModel(db_connection)
+                charges_model.creer_tables()
+                
+                st.success("✅ Connexion à la base Render réussie!")
+                st.rerun()
+            else:
+                st.error("❌ Échec de la connexion à la base Render. Vérifiez les variables d'environnement.")
+                st.stop()
+        except Exception as e:
+            st.error(f"❌ Erreur lors de la connexion automatique : {e}")
+            st.stop()
     
     # ========================================================================
     # CONNEXION AUTOMATIQUE À LA BASE DE DONNÉES (LOCAL)
@@ -591,12 +584,6 @@ DB_PASSWORD=votre_mot_de_passe_postgresql
     # ====================================================================
     # FORMULAIRE D'AUTHENTIFICATION AVEC CODE COUTURIER
     # ====================================================================
-    
-    # Mode debug : afficher le nombre de reruns (variable DEBUG_AUTH=1 dans Render)
-    if os.getenv('DEBUG_AUTH') == '1':
-        run_count = st.session_state.get('_auth_run_count', 0) + 1
-        st.session_state['_auth_run_count'] = run_count
-        st.caption(f"🔧 Debug : exécution #{run_count}")
     
     # POURQUOI ? Pour vérifier l'identité du couturier
     # COMMENT ? L'user entre son code + password, on vérifie dans la base de données
