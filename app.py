@@ -52,7 +52,7 @@ from views.fermer_commandes_view import afficher_page_fermer_commandes
 from views.calendrier_view import afficher_page_calendrier
 from views.super_admin_dashboard import afficher_dashboard_super_admin
 from utils.role_utils import est_admin
-from utils.bottom_nav import render_bottom_nav
+from utils.bottom_nav import render_bottom_nav as render_nav_footer
 from utils.permissions import est_super_admin
 from config import APP_CONFIG, PAGE_BACKGROUND_IMAGES
 # =====================
@@ -65,16 +65,31 @@ def main():
         return
 
     # --- Pages internes
-    if st.session_state.page == "commande":
+    page = st.session_state.page
+    if page in ("commande", "nouvelle_commande"):
         afficher_page_commande()
-    elif st.session_state.page == "liste":
-        #afficher_liste_commandes()
+    elif page in ("liste", "liste_commandes"):
         afficher_page_liste_commandes()
+    elif page == "dashboard":
+        afficher_page_dashboard()
+    elif page == "comptabilite":
+        afficher_page_comptabilite()
+    elif page == "charges":
+        afficher_page_mes_charges()
+    elif page == "fermer_commandes":
+        afficher_page_fermer_commandes()
+    elif page == "calendrier":
+        afficher_page_calendrier()
+    elif page == "admin":
+        afficher_page_administration()
+    elif page == "super_admin":
+        afficher_dashboard_super_admin()
     else:
         afficher_page_commande()
 
-    # --- Navigation UNIQUEMENT SI AUTH
-    render_bottom_nav({
+    # --- Navigation : boutons + footer (image / infos entreprise)
+    render_bottom_nav({})
+    render_nav_footer({
         "app_name": "Gestion Couturier",
         "app_subtitle": "Pilotage intelligent"
     })
