@@ -1,15 +1,49 @@
 """
-Application Streamlit principale - Gestion Couturier
-Architecture MVC
+Application Streamlit optimisée - Gestion Couturier
+Architecture MVC - Render SAFE - Même logique que app.py + beauté complète
+================================================================================
+Optimisations Render : bootstrap anti écran blanc, load_dotenv prioritaire.
+Contenu identique à app.py (fonctionnel sur Render) avec tout le design.
 """
 import os
 import base64
 import streamlit as st
-from dotenv import load_dotenv
+
+# =====================
+# BOOTSTRAP RENDER SAFE (anti écran blanc - affichage immédiat)
+# =====================
+st.set_page_config(
+    page_title="Gestion Couturier",
+    page_icon="👔",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+_bootstrap_placeholder = st.empty()
+with _bootstrap_placeholder:
+    st.write("⏳ Initialisation de l'application...")
 
 # Charger .env AVANT tout import de config (sinon DB_PASSWORD etc. restent vides)
+from dotenv import load_dotenv
 load_dotenv()
 
+# Render : si DATABASE_URL est fourni (format postgres://...), le parser en variables
+# pour que config.py fonctionne (DATABASE_HOST, DATABASE_NAME, etc.)
+_database_url = os.getenv("DATABASE_URL", "").strip()
+if _database_url and not os.getenv("DATABASE_HOST"):
+    try:
+        from urllib.parse import urlparse
+        _parsed = urlparse(_database_url)
+        if _parsed.scheme and "postgres" in _parsed.scheme:
+            os.environ["DATABASE_HOST"] = _parsed.hostname or ""
+            os.environ["DATABASE_PORT"] = str(_parsed.port or 5432)
+            os.environ["DATABASE_NAME"] = (_parsed.path or "").lstrip("/") or ""
+            os.environ["DATABASE_USER"] = _parsed.username or ""
+            os.environ["DATABASE_PASSWORD"] = _parsed.password or ""
+            os.environ["DATABASE_SSLMODE"] = "require"
+    except Exception:
+        pass
+
+# Imports (même ordre que app.py)
 from views.auth_view import afficher_page_connexion
 from views.commande_view import afficher_page_commande
 from views.liste_view import afficher_page_liste_commandes
@@ -29,19 +63,9 @@ from controllers.commande_controller import CommandeController
 from config import APP_CONFIG, PAGE_BACKGROUND_IMAGES
 
 
-# Configuration de la page
-# Note: APP_CONFIG sera importé après, donc on utilise une valeur par défaut ici
-st.set_page_config(
-    page_title="Gestion Couturier",
-    page_icon="👔",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # CSS personnalisé - Palette: Violet clair | Bleu turquoise | Beige (60% dominante)
 # NOTE: L'erreur 'removeChild' est un bug connu de Streamlit
 # Elle est bénigne et n'affecte pas le fonctionnement de l'application
-# Aucun JavaScript personnalisé n'est utilisé pour éviter d'aggraver le problème
 
 # Image de fond pour la sidebar (assets/nav.png) - UNIQUEMENT sur la page de connexion
 SIDEBAR_BG_PLAIN = "background: #FAFAFA !important;"
@@ -116,18 +140,11 @@ st.markdown("""
     }
     
     /* ========================================================================
-       HEADERS DE PAGE - GRADIENT VIOLET-BLEU
-       (Styles appliqués en inline pour éviter les conflits DOM)
-       ======================================================================== */
-    
-    /* ========================================================================
        SIDEBAR - BEIGE FONCÉ (valeur par défaut, surchargée ensuite)
        ======================================================================== */
     [data-testid="stSidebar"] {
         border-right: 2px solid #F5F5F5;
     }
-    
-    /* Styles pour le header de la sidebar - Supprimés car utilisés en inline uniquement */
     
     /* ========================================================================
        BOUTONS - GRADIENT VIOLET-BLEU (PAS DE NOIR !)
@@ -221,10 +238,7 @@ st.markdown("""
         color: #FFFFFF !important;
     }
     
-    /* ========================================================================
-       FORCER LE DÉGRADÉ SUR TOUS LES BOUTONS (même les rouges de Streamlit)
-       ======================================================================== */
-    /* Cibler spécifiquement les boutons qui pourraient être rouges */
+    /* FORCER LE DÉGRADÉ SUR TOUS LES BOUTONS (même les rouges de Streamlit) */
     button[data-baseweb="button"][style*="background"],
     button[data-baseweb="button"][style*="rgb"],
     button[data-baseweb="button"][style*="red"],
@@ -235,7 +249,6 @@ st.markdown("""
         background-image: linear-gradient(135deg, #B19CD9 0%, #40E0D0 100%) !important;
     }
     
-    /* Forcer sur les boutons primaires même avec styles inline */
     button[kind="primary"][style],
     button[data-baseweb="button"][kind="primary"][style] {
         background: linear-gradient(135deg, #40E0D0 0%, #B19CD9 100%) !important;
@@ -356,7 +369,6 @@ st.markdown("""
         color: #B19CD9 !important;
     }
     
-    /* Empêcher les styles noirs par défaut de Streamlit sur les boutons */
     [data-baseweb="button"] {
         background: linear-gradient(135deg, #B19CD9 0%, #40E0D0 100%) !important;
         color: #FFFFFF !important;
@@ -369,7 +381,6 @@ st.markdown("""
         color: #FFFFFF !important;
     }
     
-    /* Liens et éléments interactifs */
     [role="button"],
     [role="link"],
     [role="tab"] {
@@ -401,11 +412,10 @@ st.markdown("""
     </style>
     
     <script>
-    // Forcer le dégradé violet-bleu sur tous les boutons (SAUF la sidebar, qui a sa propre palette pastel)
+    // Forcer le dégradé violet-bleu sur tous les boutons (SAUF la sidebar)
     function forceButtonColors() {
         var sidebar = document.querySelector('[data-testid="stSidebar"]');
         function isInSidebar(btn) { return sidebar && sidebar.contains(btn); }
-        // Tous les boutons (hors sidebar)
         document.querySelectorAll('button[data-baseweb="button"]').forEach(btn => {
             if (isInSidebar(btn)) return;
             if (!btn.style.background || btn.style.background.includes('rgb') || btn.style.background.includes('#ff')) {
@@ -415,7 +425,6 @@ st.markdown("""
                 btn.style.border = 'none';
             }
         });
-        // Boutons primaires (hors sidebar)
         document.querySelectorAll('button[kind="primary"], button[data-baseweb="button"][kind="primary"]').forEach(btn => {
             if (isInSidebar(btn)) return;
             btn.style.background = 'linear-gradient(135deg, #40E0D0 0%, #B19CD9 100%)';
@@ -424,21 +433,16 @@ st.markdown("""
             btn.style.border = 'none';
         });
     }
-    
-    // Exécuter immédiatement et après le chargement
     forceButtonColors();
     window.addEventListener('load', forceButtonColors);
     setTimeout(forceButtonColors, 100);
     setTimeout(forceButtonColors, 500);
-    
-    // Observer les changements DOM pour forcer les styles sur les nouveaux boutons
     const observer = new MutationObserver(forceButtonColors);
     observer.observe(document.body, { childList: true, subtree: true });
     </script>
 """, unsafe_allow_html=True)
 
 # Surcharge du fond de la sidebar + harmonisation des boutons (palette atelier couture)
-# Note: le fond avec image (nav.png) est injecté dans main() uniquement pour la page de connexion
 def _sidebar_styles_css(sidebar_bg_css):
     return f"""
     <style>
@@ -449,10 +453,7 @@ def _sidebar_styles_css(sidebar_bg_css):
         background: transparent !important;
     }}
 
-    /* ========================================================================
-       BOUTONS SIDEBAR - Palette pastel harmonisée (beige, bleu pastel, violet doux)
-       Cohérence avec l'image de fond atelier couture, tons chauds, ambiance textile
-       ======================================================================== */
+    /* BOUTONS SIDEBAR - Palette pastel harmonisée */
     [data-testid="stSidebar"] .stButton > button {{
         background: linear-gradient(180deg, rgba(246, 239, 232, 0.9) 0%, rgba(143, 186, 217, 0.88) 50%, rgba(154, 143, 216, 0.87) 100%) !important;
         background-color: transparent !important;
@@ -477,7 +478,6 @@ def _sidebar_styles_css(sidebar_bg_css):
         outline: none !important;
         border-color: rgba(59, 47, 74, 0.2) !important;
     }}
-    /* Bouton actif (page courante) - dégradé plus marqué, ombre douce, bordure fine */
     [data-testid="stSidebar"] .stButton > button.sidebar-btn-active {{
         background: linear-gradient(175deg, rgba(246, 239, 232, 0.98) 0%, rgba(143, 186, 217, 0.92) 40%, rgba(154, 143, 216, 0.92) 100%) !important;
         color: #3B2F4A !important;
@@ -485,7 +485,6 @@ def _sidebar_styles_css(sidebar_bg_css):
         box-shadow: 0 3px 12px rgba(59, 47, 74, 0.15) !important;
         border: 1px solid rgba(59, 47, 74, 0.22) !important;
     }}
-    /* Texte et icônes sidebar - tons doux */
     [data-testid="stSidebar"] .stButton > button,
     [data-testid="stSidebar"] .stButton > button span {{
         color: #3B2F4A !important;
@@ -535,12 +534,7 @@ def _sidebar_styles_css(sidebar_bg_css):
 
 
 def get_page_background_html(page_id):
-    """
-    Retourne le HTML pour l'image de fond de la zone principale selon la page.
-    Chaque page a sa propre image (config PAGE_BACKGROUND_IMAGES).
-    Logo logoBon.png affiché au coin gauche de la zone principale.
-    CSS direct + JS de secours pour appliquer sur .main.
-    """
+    """Retourne le HTML pour l'image de fond de la zone principale selon la page."""
     import json
     image_name = PAGE_BACKGROUND_IMAGES.get(page_id)
     if not image_name:
@@ -556,10 +550,8 @@ def get_page_background_html(page_id):
         mime = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
         data_uri = f"data:{mime};base64,{b64}"
         data_uri_js = json.dumps(data_uri)
-        # Échapper pour CSS url() : les apostrophes dans la data URI
         data_uri_css = data_uri.replace("'", "\\'")
 
-        # Logo logoBon intégré en HTML (base64) - coin gauche zone principale
         logo_html = ""
         logo_path = os.path.join(project_root, "assets", "logoBon.png")
         if os.path.exists(logo_path):
@@ -570,13 +562,11 @@ def get_page_background_html(page_id):
         return f"""
     {logo_html}
     <style id="page-bg-style">
-    /* Zone principale : image en arrière-plan (floue) + voile blanc fort pour lisibilité */
     body .main, section.main, [data-testid="stAppViewContainer"] > div > section, section:has(div.block-container) {{
         position: relative !important;
         min-height: 100vh !important;
         background: #FAFAFA !important;
     }}
-    /* Calque image : flou pour rester en fond discret */
     body .main::before, section.main::before, [data-testid="stAppViewContainer"] > div > section::before, section:has(div.block-container)::before {{
         content: '' !important;
         position: absolute !important;
@@ -589,7 +579,6 @@ def get_page_background_html(page_id):
         filter: blur(14px) !important;
         opacity: 0.75 !important;
     }}
-    /* Voile blanc fort : rend le fond très clair, écrits bien visibles */
     body .main::after, section.main::after, [data-testid="stAppViewContainer"] > div > section::after, section:has(div.block-container)::after {{
         content: '' !important;
         position: absolute !important;
@@ -597,7 +586,6 @@ def get_page_background_html(page_id):
         z-index: -1 !important;
         background: rgba(255, 255, 255, 0.72) !important;
     }}
-    /* Bloc contenu : fond quasi blanc pour excellente lisibilité */
     body .main .block-container, .main .block-container {{
         background: rgba(255, 255, 255, 0.98) !important;
         border-radius: 12px !important;
@@ -635,302 +623,65 @@ def get_page_background_html(page_id):
 
 
 def initialiser_session_state():
-    """
-    POURQUOI ? Pour initialiser toutes les variables de session Streamlit
-    COMMENT ? On vérifie si chaque variable existe, sinon on la crée
-    UTILISÉ OÙ ? Appelé au début de main() pour préparer l'application
-    
-    EXPLICATION DES VARIABLES :
-    - db_connection : Stocke la connexion active à la base de données
-    - authentifie : True si le couturier est connecté, False sinon
-    - couturier_data : Informations du couturier connecté (nom, prénom, etc.)
-    - page : Page actuelle ('connexion', 'nouvelle_commande', 'liste_commandes')
-    - db_type : Type de connexion choisi ('postgresql_local' ou 'render_production')
-    """
-    # Vérifier si 'db_connection' existe dans la session
-    # Si non, on l'initialise à None (pas de connexion)
+    """Initialise toutes les variables de session Streamlit."""
     if 'db_connection' not in st.session_state:
         st.session_state.db_connection = None
-    
-    # Vérifier si l'utilisateur est authentifié
-    # Par défaut : False (non connecté)
     if 'authentifie' not in st.session_state:
         st.session_state.authentifie = False
-    
-    # Données du couturier connecté
-    # Par défaut : None (pas de données)
     if 'couturier_data' not in st.session_state:
         st.session_state.couturier_data = None
-    
-    # Page actuelle de l'application
-    # Par défaut : 'connexion' (page de démarrage)
     if 'page' not in st.session_state:
         st.session_state.page = 'connexion'
-    
-    # Type de base de données choisie
-    # Par défaut : None (pas encore choisi)
     if 'db_type' not in st.session_state:
         st.session_state.db_type = None
-
-
-def deconnecter_utilisateur():
-    """
-    Déconnecte proprement l'utilisateur.
-    NOTE: Cette fonction n'est plus utilisée directement.
-    La déconnexion se fait maintenant via JavaScript pour éviter les erreurs DOM.
-    """
-    # Cette fonction est conservée pour compatibilité mais n'est plus appelée
-    # La déconnexion se fait maintenant directement dans le bouton
-    pass
-
-
-def connecter_postgresql_local(config: dict) -> bool:
-    """
-    ============================================================================
-    FONCTION 1 : CONNEXION À POSTGRESQL LOCAL
-    ============================================================================
-    
-    POURQUOI ? Pour se connecter à PostgreSQL installé localement sur votre PC
-    QUAND ? Utilisé pendant le développement et les tests sur votre PC
-    
-    COMMENT ÇA MARCHE ?
-    1. Crée un objet DatabaseConnection avec le type 'postgresql'
-    2. Tente de se connecter avec les paramètres fournis (host, port, etc.)
-    3. Si succès : initialise les tables et retourne True
-    4. Si échec : affiche l'erreur et retourne False
-    
-    PARAMÈTRES :
-    - config : Dictionnaire avec host, port, database, user, password
-    
-    RETOURNE :
-    - True si la connexion a réussi
-    - False si la connexion a échoué
-    
-    UTILISÉ OÙ ? Dans views/auth_view.py quand l'user choisit PostgreSQL local
-    """
-    try:
-        # Créer l'objet de connexion avec le type 'postgresql'
-        db_connection = DatabaseConnection('postgresql', config)
-        
-        # Tenter de se connecter
-        if db_connection.connect():
-            # Sauvegarder la connexion dans la session Streamlit
-            st.session_state.db_connection = db_connection
-            st.session_state.db_type = 'postgresql_local'
-            
-            # Initialiser les tables de la base de données
-            # (créer les tables si elles n'existent pas)
-            auth_controller = AuthController(db_connection)
-            auth_controller.initialiser_tables()
-            
-            commande_controller = CommandeController(db_connection)
-            commande_controller.initialiser_tables()
-            
-            # Initialiser les tables des charges
-            charges_model = ChargesModel(db_connection)
-            charges_model.creer_tables()
-            
-            return True  # Connexion réussie !
-        
-        return False  # La connexion a échoué
-        
-    except Exception as e:
-        # Si une erreur se produit, l'afficher à l'utilisateur
-        st.error(f"❌ Erreur de connexion PostgreSQL local : {e}")
-        return False
-
-
-def connecter_render_production(config: dict) -> bool:
-    """
-    ============================================================================
-    FONCTION 2 : CONNEXION À RENDER PRODUCTION
-    ============================================================================
-    
-    POURQUOI ? Pour se connecter à PostgreSQL hébergé sur Render (cloud)
-    QUAND ? Utilisé en production quand l'app est déployée en ligne
-    
-    COMMENT ÇA MARCHE ?
-    Exactement comme connecter_postgresql_local(), mais :
-    - Se connecte à un serveur distant (Render) au lieu de localhost
-    - Utilise les identifiants fournis par Render
-    - Peut nécessiter SSL pour la sécurité
-    
-    DIFFÉRENCE AVEC POSTGRESQL LOCAL ?
-    - PostgreSQL Local : Base de données sur VOTRE ordinateur (localhost)
-    - Render : Base de données sur un serveur en ligne (accessible partout)
-    
-    PARAMÈTRES :
-    - config : Dictionnaire avec host, port, database, user, password de Render
-    
-    RETOURNE :
-    - True si la connexion a réussi
-    - False si la connexion a échoué
-    
-    UTILISÉ OÙ ? Dans views/auth_view.py quand l'user choisit Render
-    """
-    try:
-        # Créer l'objet de connexion avec le type 'postgresql'
-        # (Render utilise aussi PostgreSQL, mais hébergé en ligne)
-        db_connection = DatabaseConnection('postgresql', config)
-        
-        # Tenter de se connecter au serveur Render
-        if db_connection.connect():
-            # Sauvegarder la connexion dans la session
-            st.session_state.db_connection = db_connection
-            st.session_state.db_type = 'render_production'
-            
-            # Initialiser les tables
-            auth_controller = AuthController(db_connection)
-            auth_controller.initialiser_tables()
-            
-            commande_controller = CommandeController(db_connection)
-            commande_controller.initialiser_tables()
-            
-            # Initialiser les tables des charges
-            charges_model = ChargesModel(db_connection)
-            charges_model.creer_tables()
-            
-            return True  # Connexion réussie !
-        
-        return False  # La connexion a échoué
-        
-    except Exception as e:
-        # Afficher l'erreur spécifique à Render
-        st.error(f"❌ Erreur de connexion Render : {e}")
-        return False
-
-
-def afficher_header_app():
-    """
-    Affiche le header de l'application avec logo et nom (multi-tenant)
-    Le logo est récupéré depuis la base de données selon le salon de l'utilisateur
-    Retourne le HTML formaté pour être utilisé dans la sidebar
-    """
-    import base64
-    import os
-    
-    # Nom de l'application (depuis la configuration)
-    app_name = APP_CONFIG.get('name', 'JAIND')
-    
-    # Récupérer le logo depuis la base de données (multi-tenant)
-    logo_base64 = None
-    logo_mime = None
-    
-    try:
-        # Vérifier si on a une connexion à la base de données et un utilisateur connecté
-        if st.session_state.get('db_connection') and st.session_state.get('couturier_data'):
-            from models.database import AppLogoModel
-            from utils.role_utils import obtenir_salon_id
-            
-            couturier_data = st.session_state.get('couturier_data')
-            salon_id = obtenir_salon_id(couturier_data)
-            
-            if salon_id:
-                logo_model = AppLogoModel(st.session_state.db_connection)
-                logo_data = logo_model.recuperer_logo(salon_id)
-                
-                if logo_data and logo_data.get('logo_data'):
-                    logo_bytes = logo_data['logo_data']
-                    logo_mime = logo_data.get('mime_type', 'image/png')
-                    logo_base64 = base64.b64encode(logo_bytes).decode()
-    except Exception as e:
-        # En cas d'erreur, on continue sans logo
-        print(f"Erreur récupération logo depuis BDD: {e}")
-        logo_base64 = None
-    
-    # Fallback : chercher le logo dans le système de fichiers si pas en BDD
-    if not logo_base64:
-        logo_base_path = APP_CONFIG.get('logo_path', 'assets/logo')
-        logo_path = None
-        logo_ext = None
-        
-        for ext in ['png', 'jpg', 'jpeg']:
-            test_path = f"{logo_base_path}.{ext}"
-            if os.path.exists(test_path):
-                logo_path = test_path
-                logo_ext = ext
-                break
-        
-        if logo_path:
-            try:
-                with open(logo_path, "rb") as img_file:
-                    logo_base64 = base64.b64encode(img_file.read()).decode()
-                    logo_mime = f"image/{logo_ext}"
-            except Exception:
-                logo_base64 = None
-    
-    # Construire le HTML - CENTRÉ avec styles inline uniquement (pas de classes CSS)
-    html = '<div style="text-align: center; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem 1rem; margin-bottom: 1rem; border-bottom: 2px solid #F5F5F5;">'
-    
-    if logo_base64:
-        mime_type = logo_mime or 'image/png'
-        html += f'<img src="data:{mime_type};base64,{logo_base64}" alt="Logo" style="max-width: min(340px, 95%); max-height: 340px; width: auto; height: auto; margin: 0 auto; display: block; border-radius: 12px; box-shadow: 0 3px 12px rgba(0,0,0,0.15); object-fit: contain;">'
-    
-    html += '</div>'
-    
-    return html
 
 
 def afficher_sidebar():
     """Affiche la barre latérale avec navigation"""
     with st.sidebar:
         if st.session_state.authentifie:
-            # Marqueur pour le JS : page courante (pour style bouton actif)
             current_page = st.session_state.get("page", "connexion")
             st.markdown(
                 f'<div id="sidebar-current-page" data-page="{current_page}" style="display:none;"></div>',
                 unsafe_allow_html=True,
             )
-            # Informations du couturier connecté
             st.success(f"**Connecté:** {st.session_state.couturier_data['prenom']} {st.session_state.couturier_data['nom']}")
             role_display = st.session_state.couturier_data.get('role', 'employe')
             st.info(f"**Code:** {st.session_state.couturier_data['code_couturier']} | **Rôle:** {role_display}")
             st.markdown("---")
             
-            # Menu SUPER ADMINISTRATION (uniquement pour SUPER_ADMIN) - EN PREMIER
             if est_super_admin():
                 st.markdown("### 🔧 SUPER ADMINISTRATION")
-                
                 if st.button("📊 Dashboard Super Admin", width='stretch'):
                     st.session_state.page = 'super_admin_dashboard'
                     st.rerun()
-                
                 st.markdown("---")
                 st.markdown("### 📋 Navigation")
             else:
-                # Navigation standard pour les autres utilisateurs
                 st.markdown("### 📋 Navigation")
             
-            # Boutons de navigation standard (pour tous)
             if st.button("📊 Tableau de bord", width='stretch'):
                 st.session_state.page = 'dashboard'
                 st.rerun()
-            
             if st.button("➕ Nouvelle commande", width='stretch'):
                 st.session_state.page = 'nouvelle_commande'
                 st.rerun()
-            
             if st.button("📜 Mes commandes", width='stretch'):
                 st.session_state.page = 'liste_commandes'
                 st.rerun()
-            
             if st.button("💰 Comptabilité", width='stretch'):
                 st.session_state.page = 'comptabilite'
                 st.rerun()
-            
             if st.button("📄 Mes charges", width='stretch'):
                 st.session_state.page = 'charges'
                 st.rerun()
-            
             if st.button("🔒 Fermer mes commandes", width='stretch'):
                 st.session_state.page = 'fermer_commandes'
                 st.rerun()
-            
             if st.button("📋 Modèles & Calendrier", width='stretch'):
                 st.session_state.page = 'calendrier'
                 st.rerun()
             
-            # Menu Administration (uniquement pour les admins normaux, pas SUPER_ADMIN)
             if est_admin(st.session_state.couturier_data) and not est_super_admin():
                 st.markdown("---")
                 st.markdown("### 👑 Administration")
@@ -939,84 +690,49 @@ def afficher_sidebar():
                     st.rerun()
             
             st.markdown("---")
-            
-            # Bouton de déconnexion avec approche simplifiée
             if st.button("🚪 Déconnexion", width='stretch', key="btn_deconnexion"):
-                # Nettoyer la session immédiatement
                 try:
-                    # Déconnecter la base de données
                     if st.session_state.get('db_connection'):
                         try:
                             st.session_state.db_connection.disconnect()
-                        except:
+                        except Exception:
                             pass
-                    
-                    # Nettoyer toutes les clés sauf les essentielles
                     keys_to_keep = ['db_connection', 'db_type']
                     for key in list(st.session_state.keys()):
                         if key not in keys_to_keep:
                             try:
                                 del st.session_state[key]
-                            except:
+                            except Exception:
                                 pass
-                    
-                    # Marquer comme déconnecté
                     st.session_state.authentifie = False
                     st.session_state.couturier_data = None
                     st.session_state.page = 'connexion'
-                    
                 except Exception:
-                    # En cas d'erreur, forcer quand même la déconnexion
                     st.session_state.authentifie = False
                     st.session_state.couturier_data = None
                     st.session_state.page = 'connexion'
-                
-                # Rediriger vers la page de connexion
                 st.rerun()
         else:
-            # Afficher au moins un bloc vide pour forcer l'affichage de la sidebar
-            st.markdown(
-                "<div style='height: 100vh;'></div>",
-                unsafe_allow_html=True,
-            )
-
-
-def afficher_header_principal():
-    """
-    Header minimaliste et élégant - Design épuré
-    """
-    # Header discret avec juste un séparateur élégant
-    st.markdown("""
-        <div style='border-bottom: 2px solid #e0e0e0; margin-bottom: 1.5rem; padding-bottom: 0.5rem;'>
-        </div>
-    """, unsafe_allow_html=True)
+            st.markdown("<div style='height: 100vh;'></div>", unsafe_allow_html=True)
 
 
 def main():
     """Fonction principale de l'application"""
+    _bootstrap_placeholder.empty()  # Masquer le message d'init une fois le contenu prêt
     initialiser_session_state()
     
-    # Sidebar : image de fond (nav.png) uniquement sur la page de connexion
     sidebar_bg_css = sidebar_bg_css_with_image if not st.session_state.authentifie else SIDEBAR_BG_PLAIN
     st.markdown(_sidebar_styles_css(sidebar_bg_css), unsafe_allow_html=True)
     
-    # Afficher la sidebar
     afficher_sidebar()
     
-    # Header minimaliste (optionnel, peut être commenté)
-    # afficher_header_principal()
-    
-    # Router selon la page
     if not st.session_state.authentifie:
-        # Page de connexion
         afficher_page_connexion()
     else:
-        # Pages authentifiées : image de fond selon la page (calque fixe + style)
         page_bg_html = get_page_background_html(st.session_state.page)
         if page_bg_html:
             st.markdown(page_bg_html, unsafe_allow_html=True)
 
-        # Logo logoBon au coin gauche de l'image principale
         logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logoBon.png")
         if os.path.exists(logo_path):
             try:
@@ -1030,7 +746,6 @@ def main():
                 with c1:
                     st.image(logo_path, width=100)
 
-        # Dashboard SUPER_ADMIN (priorité absolue)
         if st.session_state.page == 'super_admin_dashboard':
             if est_super_admin():
                 afficher_dashboard_super_admin()
@@ -1053,7 +768,6 @@ def main():
         elif st.session_state.page == 'dashboard':
             afficher_page_dashboard()
         elif st.session_state.page == 'administration':
-            # Vérifier que l'utilisateur est admin
             if est_admin(st.session_state.couturier_data):
                 afficher_page_administration()
             else:
@@ -1061,7 +775,6 @@ def main():
                 st.session_state.page = 'dashboard'
                 st.rerun()
         else:
-            # Page par défaut après connexion
             if est_super_admin():
                 st.session_state.page = 'super_admin_dashboard'
             else:
