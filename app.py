@@ -34,10 +34,23 @@ if "page" not in st.session_state:
 # IMPORTS (APRÈS INIT)
 # =====================
 from views.auth_view import afficher_page_connexion
-from views.commande_view import afficher_page_commande
+#from views.commande_view import afficher_page_commande
 from views.liste_view import afficher_liste_commandes
 from components.bottom_nav import render_bottom_nav
-
+from views.auth_view import afficher_page_connexion
+from views.commande_view import afficher_page_commande
+from views.liste_view import afficher_page_liste_commandes
+from views.comptabilite_view import afficher_page_comptabilite
+from views.dashboard_view import afficher_page_dashboard
+from views.mes_charges_view import afficher_page_mes_charges
+from views.admin_view import afficher_page_administration
+from views.fermer_commandes_view import afficher_page_fermer_commandes
+from views.calendrier_view import afficher_page_calendrier
+from views.super_admin_dashboard import afficher_dashboard_super_admin
+from utils.role_utils import est_admin
+from utils.bottom_nav import render_bottom_nav
+from utils.permissions import est_super_admin
+from config import APP_CONFIG, PAGE_BACKGROUND_IMAGES
 # =====================
 # ROUTER PRINCIPAL
 # =====================
