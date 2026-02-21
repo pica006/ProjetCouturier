@@ -30,6 +30,10 @@ if "authenticated" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "login"
 
+if "db" not in st.session_state:
+    from database import get_db
+    st.session_state.db = get_db()
+
 # =====================
 # IMPORTS (APRÈS INIT)
 # =====================
