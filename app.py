@@ -35,7 +35,7 @@ if "page" not in st.session_state:
 # =====================
 from views.auth_view import afficher_page_connexion
 #from views.commande_view import afficher_page_commande
-from views.liste_view import afficher_liste_commandes
+#from views.liste_view import afficher_liste_commandes
 from components.bottom_nav import render_bottom_nav
 from views.auth_view import afficher_page_connexion
 from views.commande_view import afficher_page_commande
@@ -64,7 +64,8 @@ def main():
     if st.session_state.page == "commande":
         afficher_page_commande()
     elif st.session_state.page == "liste":
-        afficher_liste_commandes()
+        #afficher_liste_commandes()
+        afficher_page_liste_commandes()
     else:
         afficher_page_commande()
 
