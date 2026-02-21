@@ -16,12 +16,21 @@ from utils.role_utils import obtenir_salon_id
 def afficher_page_commande():
     """Affiche la page de création de commande"""
     
+    # Vérifier la connexion et la base de données
+    db = st.session_state.get("db")
+    if not db or not st.session_state.authenticated:
+        st.error("❌ Vous devez être connecté pour accéder à cette page")
+        return
+    
+    if not db.is_connected():
+        st.error("❌ Connexion à la base de données indisponible. Vérifiez DATABASE_URL.")
+        return
+    
     # En-tête encadré standardisé
     from utils.page_header import afficher_header_page
     afficher_header_page("➕ Nouvelle Commande", "Créer une nouvelle commande pour un client")
     
     # Initialiser les contrôleurs
-    db = st.session_state.db
     commande_controller = CommandeController(db)
     pdf_controller = PDFController(db_connection=db)
 
