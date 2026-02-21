@@ -60,7 +60,7 @@ def main():
         nav_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "nav.png")
         if os.path.exists(nav_path):
             with st.sidebar:
-                st.image(nav_path, use_container_width=True)
+                st.image(nav_path, width=300)
         afficher_page_connexion()
         return
 
