@@ -1,13 +1,14 @@
-# app3.py
+# app.py
 """
-Gestion Couturier - Version STABLE
+Application Streamlit principale - Gestion Couturier
+Architecture MVC - Render SAFE
 """
 
 import os
 import streamlit as st
 
 # =====================
-# BOOTSTRAP (identique app.py - PAS de placeholder)
+# BOOTSTRAP VISUEL (ANTI ÉCRAN BLANC)
 # =====================
 st.set_page_config(page_title="Gestion Couturier", layout="wide")
 st.write("⏳ Initialisation de l'application...")
@@ -33,11 +34,17 @@ if "db" not in st.session_state:
     from database import get_db
     st.session_state.db = get_db()
 
+if "user" not in st.session_state:
+    st.session_state.user = None
+
 # =====================
 # IMPORTS (APRÈS INIT)
 # =====================
 from views.auth_view import afficher_page_connexion
+#from views.commande_view import afficher_page_commande
+#from views.liste_view import afficher_liste_commandes
 from components.bottom_nav import render_bottom_nav
+from views.auth_view import afficher_page_connexion
 from views.commande_view import afficher_page_commande
 from views.liste_view import afficher_page_liste_commandes
 from views.comptabilite_view import afficher_page_comptabilite
@@ -50,72 +57,17 @@ from views.super_admin_dashboard import afficher_dashboard_super_admin
 from utils.role_utils import est_admin
 from utils.bottom_nav import render_bottom_nav as render_nav_footer
 from utils.permissions import est_super_admin
-
+from config import APP_CONFIG, PAGE_BACKGROUND_IMAGES
 # =====================
-# CSS sidebar : boutons gradient violet-bleu (comme image 2)
-# =====================
-st.markdown("""
-<style>
-[data-testid="stSidebar"] .stButton > button {
-    background: linear-gradient(135deg, #B19CD9 0%, #40E0D0 100%) !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 10px !important;
-    width: 100% !important;
-    text-align: left !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# =====================
-# ROUTER
+# ROUTER PRINCIPAL
 # =====================
 def main():
+
     if not st.session_state.authenticated:
-        # Sidebar : image nav.png si dispo (remplace le bandeau bleu)
-        nav_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "nav.png")
-        if os.path.exists(nav_path):
-            with st.sidebar:
-                st.image(nav_path, width=300)
         afficher_page_connexion()
         return
 
-    # --- Sidebar : navigation (comme image 2)
-    with st.sidebar:
-        st.markdown("### 📋 Navigation")
-        if st.button("📊 Tableau de bord", key="sb_dashboard"):
-            st.session_state.page = "dashboard"
-            st.rerun()
-        if st.button("➕ Nouvelle commande", key="sb_commande"):
-            st.session_state.page = "commande"
-            st.rerun()
-        if st.button("📋 Mes commandes", key="sb_liste"):
-            st.session_state.page = "liste"
-            st.rerun()
-        if st.button("💰 Comptabilité", key="sb_compta"):
-            st.session_state.page = "comptabilite"
-            st.rerun()
-        if st.button("📄 Mes frais", key="sb_charges"):
-            st.session_state.page = "charges"
-            st.rerun()
-        if st.button("🔒 Fermer mes commandes", key="sb_fermer"):
-            st.session_state.page = "fermer_commandes"
-            st.rerun()
-        if st.button("📅 Modèles & Calendrier", key="sb_calendrier"):
-            st.session_state.page = "calendrier"
-            st.rerun()
-        if est_admin(st.session_state.get("user") or st.session_state.get("couturier_data") or {}):
-            st.markdown("---")
-            st.markdown("### 👑 Administration")
-            if st.button("👑 Administration", key="sb_admin"):
-                st.session_state.page = "admin"
-                st.rerun()
-        st.markdown("---")
-        if st.button("🚪 Déconnexion", key="sb_deco"):
-            st.session_state.authenticated = False
-            st.session_state.page = "login"
-            st.rerun()
-
+    # --- Pages internes
     page = st.session_state.page
     if page in ("commande", "nouvelle_commande"):
         afficher_page_commande()
@@ -138,6 +90,7 @@ def main():
     else:
         afficher_page_commande()
 
+    # --- Navigation : boutons + footer (image / infos entreprise)
     render_bottom_nav({})
     render_nav_footer({
         "app_name": "Gestion Couturier",
@@ -145,4 +98,7 @@ def main():
     })
 
 
+# =====================
+# RUN
+# =====================
 main()
