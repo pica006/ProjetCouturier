@@ -1,7 +1,7 @@
 """
 Point d'entree Streamlit minimal.
-- Initialisation session_state
-- Connexion DB via service
+- Initialisation session_state (IDEMPOTENTE)
+- Connexion DB via service (1 tentative / session)
 - Routing des vues
 """
 
@@ -36,8 +36,6 @@ from views.super_admin_dashboard import afficher_dashboard_super_admin
 
 
 logger = get_logger(__name__)
-
-
 load_dotenv()
 
 st.set_page_config(
@@ -46,9 +44,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 st.markdown(get_main_css(), unsafe_allow_html=True)
 
 
+# ---------------- SIDEBAR ----------------
 def _render_sidebar() -> None:
     with st.sidebar:
         if not st.session_state.get("authentifie", False):
@@ -80,6 +80,7 @@ def _render_sidebar() -> None:
             ("🔒 Fermer mes commandes", "fermer_commandes"),
             ("📋 Modèles & Calendrier", "calendrier"),
         ]
+
         for label, page_id in routes:
             if st.button(label, use_container_width=True):
                 st.session_state.page = page_id
@@ -95,11 +96,11 @@ def _render_sidebar() -> None:
         if st.button("🚪 Deconnexion", use_container_width=True):
             clear_user_session(st.session_state)
             st.session_state.authentifie = False
-            st.session_state.couturier_data = None
             st.session_state.page = "connexion"
             st.rerun()
 
 
+# ---------------- ROUTING ----------------
 def _route_authenticated_page() -> None:
     page = st.session_state.get("page", "dashboard")
 
@@ -107,9 +108,10 @@ def _route_authenticated_page() -> None:
         if est_super_admin():
             afficher_dashboard_super_admin()
         else:
-            st.error("❌ Acces refuse. Cette page est reservee au Super Administrateur.")
+            st.error("❌ Acces refuse.")
             st.session_state.page = "dashboard"
             st.rerun()
+
     elif page == "nouvelle_commande":
         afficher_page_commande()
     elif page == "liste_commandes":
@@ -126,47 +128,40 @@ def _route_authenticated_page() -> None:
         if est_admin(st.session_state.get("couturier_data")):
             afficher_page_administration()
         else:
-            st.error("❌ Acces refuse. Cette page est reservee aux administrateurs.")
+            st.error("❌ Acces refuse.")
             st.session_state.page = "dashboard"
             st.rerun()
     else:
         afficher_page_dashboard()
 
 
-def _invalidate_user_and_redirect_to_login(message: str) -> None:
-    """
-    Coupe proprement la session utilisateur si la DB est indisponible.
-    """
-    st.warning(f"⚠️ {message}")
-    clear_user_session(st.session_state)
-    st.session_state.authentifie = False
-    st.session_state.couturier_data = None
-    st.session_state.page = "connexion"
-    st.session_state.db_connection = None
-    st.session_state.db_initialized = False
-    st.session_state.db_available = False
-    st.rerun()
-
-
+# ---------------- MAIN ----------------
 def main() -> None:
-    initialize_session_state(st.session_state)
+    # ✅ Initialisation SAFE (ne reset jamais)
+    if not st.session_state.get("_initialized", False):
+        initialize_session_state(st.session_state)
+        st.session_state._initialized = True
 
     sidebar_bg = _load_sidebar_bg_image()
 
+    # ---------- LOGIN ----------
     if not st.session_state.get("authentifie", False):
         st.markdown(get_sidebar_styles_css(sidebar_bg), unsafe_allow_html=True)
         _render_sidebar()
         afficher_page_connexion()
+        return  # ❌ aucun rerun ici
+
+    # ---------- DB (1 tentative par session) ----------
+    if not st.session_state.get("db_initialized", False):
+        db_ready, _ = ensure_db_or_fail_gracefully(st.session_state, max_retries=1)
+        st.session_state.db_initialized = True
+        st.session_state.db_available = db_ready
+
+    if not st.session_state.get("db_available", False):
+        st.error("⚠️ Base de données indisponible. Rechargez la page.")
         return
 
-    db_ready, db_message = ensure_db_or_fail_gracefully(st.session_state, max_retries=2)
-    if not db_ready:
-        logger.error("DB indisponible en session authentifiée: %s", db_message)
-        _invalidate_user_and_redirect_to_login(
-            "Connexion base perdue. Merci de vous reconnecter dans quelques secondes."
-        )
-        return
-
+    # ---------- APP ----------
     st.markdown(get_sidebar_styles_css(SIDEBAR_BG_PLAIN), unsafe_allow_html=True)
     _render_sidebar()
 
@@ -176,17 +171,8 @@ def main() -> None:
     )
     if page_bg_html:
         st.markdown(page_bg_html, unsafe_allow_html=True)
-    try:
-        _route_authenticated_page()
-    except Exception:
-        logger.exception("Erreur non capturée pendant le routing/authenticated view")
-        db_ready, db_message = ensure_db_or_fail_gracefully(st.session_state, max_retries=1)
-        if not db_ready:
-            _invalidate_user_and_redirect_to_login(
-                "La base est indisponible. Session réinitialisée pour éviter un écran bloqué."
-            )
-            return
-        st.error("❌ Une erreur temporaire est survenue. Réessayez.")
+
+    _route_authenticated_page()
 
     render_bottom_nav(
         {
